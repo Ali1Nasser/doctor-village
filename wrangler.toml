@@ -1,0 +1,86 @@
+#:schema node_modules/wrangler/config-schema.json
+#
+# Cloudflare Workers configuration.
+#
+# ⚠️ ACCOUNT OWNERSHIP (R-034, C11): this account must belong to the جمعية, not
+# to the developer. Creating it personally and "transferring it later" is how a
+# bus factor of one becomes permanent. Check before launch:
+#   · the Cloudflare account is owned by a board-held email;
+#   · **no payment method is attached** — every service we use blocks at its
+#     free limit rather than billing (ADR-014), and R2 was dropped precisely
+#     because it demands a card (ADR-015);
+#   · the GitHub repo and the backup Drive folder are board-owned too.
+
+name = "qaryat-atebaa"
+main = "src/worker.ts"
+compatibility_date = "2026-08-04"
+compatibility_flags = ["nodejs_compat"]
+account_id = "1ca337dfa2c4b572409e393e577c3bc5"
+
+# --- variables -----------------------------------------------------------
+# ⚠️ WEBAUTHN_RP_ID is the domain passkeys are BOUND to (R-022). Changing it
+# after residents enrol invalidates EVERY passkey in the village and forces
+# assisted recovery for all of them. Decide the final domain BEFORE resident #1.
+[vars]
+WEBAUTHN_RP_ID   = "qaryat-atebaa.pages.dev"
+WEBAUTHN_RP_NAME = "بوابة قرية الأطباء"
+WEBAUTHN_ORIGIN  = "https://qaryat-atebaa.pages.dev"
+APP_ENV          = "production"
+
+# --- database ------------------------------------------------------------
+# Free tier, verified 2026-08-04: 500 MB per database, 10 databases, 5M reads
+# and 100k writes per day. Exceeding a limit BLOCKS; it never bills.
+[[d1_databases]]
+binding       = "DB"
+database_name = "qaryat-atebaa"
+database_id   = "TODO(owner-input): fill from `wrangler d1 create qaryat-atebaa`"
+migrations_dir = "migrations"
+
+# ⚠️ Receipt images live in a SEPARATE database (ADR-023). Not for tidiness: if
+# blobs share the ledger's database, the nightly dump carries every image and the
+# CP-8 restore drill gets slow enough that people stop running it — which is how
+# a backup quietly stops being a backup. Apply ONLY migrations/0008 to this one.
+[[d1_databases]]
+binding       = "RECEIPTS"
+database_name = "qaryat-atebaa-receipts"
+database_id   = "TODO(owner-input): `wrangler d1 create qaryat-atebaa-receipts`"
+
+# --- KV ------------------------------------------------------------------
+# Read-mostly cache ONLY. KV allows 1,000 writes/day against D1's 100,000, so
+# anything an UNAUTHENTICATED caller can trigger a write to lives in D1 —
+# sessions, WebAuthn challenges, rate limits (ADR-017). One attacker hammering
+# /login must not be able to exhaust the day's budget for the whole village.
+[[kv_namespaces]]
+binding = "CACHE"
+id      = "TODO(owner-input): fill from `wrangler kv namespace create CACHE`"
+
+# --- object storage ------------------------------------------------------
+# ⛔ NO [[r2_buckets]] BLOCK, DELIBERATELY. Cloudflare's own R2 docs require
+# "completing the checkout flow to add an R2 subscription" even for the free
+# tier, and adding a card triggers a $5 authorization hold. That violates C11.
+# Receipt images live in the RECEIPTS D1 database above (ADR-023) — no card, no
+# new vendor, and measured at ~27 MB/year. Adding an r2_buckets block here
+# re-introduces the card requirement; do not, without a superseding ADR.
+
+# --- nightly backup ------------------------------------------------------
+# D1 dump -> off-platform, so the data is never hostage to one vendor (05 §5).
+[triggers]
+crons = ["17 2 * * *"]
+
+# --- secrets (set with `wrangler secret put`, never committed) ------------
+#   GDRIVE_SERVICE_ACCOUNT_JSON   the board-owned Drive service account
+#   GDRIVE_FOLDER_ID              the board's receipts folder
+#   SESSION_PEPPER                extra entropy mixed into session token hashes
+
+# ---------------------------------------------------------------------------
+# Web Push (Q23). Generate ONCE with `npm run gen:vapid`, then never again —
+# a new key silently orphans every resident's subscription (R-069). Migration
+# 0018 records the first key used and refuses to send under a different one, so
+# the failure is loud; that guard is a backstop, not permission to re-run it.
+# ---------------------------------------------------------------------------
+# [vars]
+# VAPID_PUBLIC_KEY = "<paste the PUBLIC key from npm run gen:vapid>"
+# VAPID_SUBJECT    = "mailto:board@<your-domain>"
+#
+# The private half is a SECRET and never appears in this file or in the repo:
+#   npx wrangler secret put VAPID_PRIVATE_KEY

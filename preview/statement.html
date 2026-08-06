@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>كشف حساب 2026 — بوابة قرية الأطباء</title>
+<style>
+:root{
+  --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
+  --brand:#0E5C63; --brand-ink:#fff; --brand-soft:#E3F0F1; --accent:#C1873B;
+  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#A96A00; --warn-soft:#FBEFD9;
+  --danger:#B3261E; --danger-soft:#FBE9E7; --info:#1F5FA8; --info-soft:#E5EFFA;
+  --border:#DFDCD5; --radius:14px; --tap:48px; --fs-body:17px;
+}
+/* The dark ramp is authored, not an inverted filter. Each step was picked from
+   the same hue family as its light counterpart so a status chip keeps meaning
+   the same thing in both — an inversion turns --warn amber into a blue nobody
+   reads as "careful". */
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#14171A; --surface:#1C2124; --surface-2:#242A2E; --ink:#E8EAE7;
+    --ink-muted:#A3ABA6; --brand:#5FB8C0; --brand-ink:#0B2225; --brand-soft:#123B40;
+    --ok:#5BC98C; --ok-soft:#12331F; --warn:#E0A845; --warn-soft:#33260C;
+    --danger:#F08A82; --danger-soft:#3A1512; --info:#7FB0EE; --info-soft:#122844;
+    --border:#333A3E; }
+}
+/* An explicit choice beats the OS guess, in BOTH directions — a resident who
+   picks light on a phone locked to dark must get light. Hence two selectors
+   with equal specificity to the media query above, applied after it. */
+html[data-theme="dark"]{
+  --bg:#14171A; --surface:#1C2124; --surface-2:#242A2E; --ink:#E8EAE7;
+  --ink-muted:#A3ABA6; --brand:#5FB8C0; --brand-ink:#0B2225; --brand-soft:#123B40;
+  --ok:#5BC98C; --ok-soft:#12331F; --warn:#E0A845; --warn-soft:#33260C;
+  --danger:#F08A82; --danger-soft:#3A1512; --info:#7FB0EE; --info-soft:#122844;
+  --border:#333A3E;
+}
+html[data-theme="light"]{
+  --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
+  --brand:#0E5C63; --brand-ink:#fff; --brand-soft:#E3F0F1;
+  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#A96A00; --warn-soft:#FBEFD9;
+  --danger:#B3261E; --danger-soft:#FBE9E7; --info:#1F5FA8; --info-soft:#E5EFFA;
+  --border:#DFDCD5;
+}
+/* Font size is a root variable so every rem in the sheet scales together.
+   04_UX_SPEC's design target is a 71-year-old on a five-year-old Android; the
+   floor is 17px and the two larger steps are what makes the difference between
+   using this portal and giving up on it. */
+html[data-fs="lg"]{--fs-body:19px}
+html[data-fs="xl"]{--fs-body:21px}
+*{box-sizing:border-box}
+html{font-size:var(--fs-body)}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.75;font-size:1rem;
+  font-family:"IBM Plex Sans Arabic","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;
+  -webkit-text-size-adjust:100%}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.cur{font-size:.75em;color:var(--ink-muted)}
+.skip{position:absolute;inset-block-start:-100px;inset-inline-start:0;background:var(--brand);
+  color:var(--brand-ink);padding:12px;z-index:99}
+.skip:focus{inset-block-start:0}
+header{background:var(--brand);color:var(--brand-ink);padding:18px 16px}
+header h1{margin:0;font-size:1.3rem}
+header p{margin:2px 0 0;opacity:.85;font-size:.9rem}
+main{max-width:760px;margin:0 auto;padding:16px 16px 96px}
+h2{font-size:1.2rem;margin:28px 0 12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:18px;margin-block-end:14px}
+.muted{color:var(--ink-muted);font-size:.9rem}
+.hero{font-size:2rem;font-weight:700;margin:4px 0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.tiles{grid-template-columns:1fr}}
+.tile{background:var(--surface);border:1px solid var(--border);
+  border-inline-start:5px solid var(--tc,var(--brand));border-radius:var(--radius);padding:16px}
+.tile .lbl{display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--ink-muted)}
+.tile .ico{inline-size:26px;block-size:26px;flex:0 0 26px;display:grid;place-items:center;
+  border-radius:50%;background:var(--tsoft,var(--brand-soft));color:var(--tc,var(--brand));font-size:.8rem}
+.tile .v{font-size:1.6rem;font-weight:700;margin-block-start:6px;color:var(--tc,var(--ink))}
+.tile .note{font-size:.85rem;color:var(--ink-muted)}
+.btn{display:flex;align-items:center;justify-content:center;inline-size:100%;min-block-size:var(--tap);
+  background:var(--brand);color:var(--brand-ink);border:0;border-radius:var(--radius);
+  font-size:1.1rem;font-weight:700;margin-block-start:10px;font-family:inherit;cursor:pointer;
+  text-decoration:none;padding:10px 16px}
+.btn-2{background:var(--surface-2);color:var(--ink);border:1px solid var(--border)}
+.btn-danger{background:var(--danger-soft);color:var(--danger);border:1px solid currentColor}
+.btn:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{
+  outline:3px solid var(--brand);outline-offset:2px}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 12px;
+  font-size:.85rem;font-weight:600;border:1px solid currentColor}
+.chip.warn{color:var(--warn);background:var(--warn-soft)}
+.chip.ok{color:var(--ok);background:var(--ok-soft)}
+.chip.danger{color:var(--danger);background:var(--danger-soft)}
+.chip.info{color:var(--info);background:var(--info-soft)}
+.chip.mute{color:var(--ink-muted);background:var(--surface-2)}
+label{display:block;font-weight:600;margin-block-end:6px}
+input,select,textarea{inline-size:100%;min-block-size:var(--tap);font-size:1.05rem;
+  font-family:inherit;padding:10px 12px;border:2px solid var(--border);border-radius:10px;
+  background:var(--surface);color:var(--ink)}
+input[inputmode="decimal"],input[type="tel"]{direction:ltr;text-align:start;
+  font-variant-numeric:tabular-nums;font-size:1.4rem}
+.field{margin-block-end:16px}
+.hint{font-size:.85rem;color:var(--ink-muted);margin-block-start:4px}
+.grid-cats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cat{min-block-size:var(--tap);display:flex;align-items:center;gap:8px;padding:12px;
+  border:2px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer}
+.cat.sel{border-color:var(--brand);background:var(--brand-soft)}
+.bar-row{margin-block-end:14px}
+.bar-label{display:flex;justify-content:space-between;gap:12px;font-size:.9rem;margin-block-end:5px}
+.bar-val{color:var(--ink-muted);white-space:nowrap}
+.track{background:var(--surface-2);border-radius:4px;block-size:14px;overflow:hidden}
+.fill{block-size:100%;background:var(--brand);border-radius:4px}
+/* A meter past 70% is not a different shade of the same thing — it is a
+   different state, so it changes hue AND gains a text label beside it.
+   R-035: colour alone is never the signal. */
+.fill.warn{background:var(--warn)}
+.fill.danger{background:var(--danger)}
+.q-row{padding-block:10px;border-block-end:1px solid var(--border)}
+.q-row:last-child{border-block-end:none}
+.q-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  margin-block-end:6px;flex-wrap:wrap}
+.q-svc{font-weight:600}
+.q-un{color:var(--ink-muted);font-size:.85rem}
+table{inline-size:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:start;padding:9px 6px;border-block-end:1px solid var(--border)}
+th{color:var(--ink-muted);font-weight:600;font-size:.85rem}
+td.n{direction:ltr;text-align:start;font-variant-numeric:tabular-nums}
+details summary{cursor:pointer;min-block-size:var(--tap);display:flex;align-items:center;
+  color:var(--brand);font-weight:600}
+.banner{border-radius:var(--radius);padding:12px 14px;margin-block:14px;font-size:.9rem;
+  border:1px solid currentColor}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.info{background:var(--info-soft);color:var(--info)}
+.banner.ok{background:var(--ok-soft);color:var(--ok)}
+.empty{text-align:center;padding:32px 16px;color:var(--ink-muted)}
+.empty .big{font-size:2.4rem;margin-block-end:8px}
+.skel{background:linear-gradient(90deg,var(--surface-2),var(--bg),var(--surface-2));
+  border-radius:8px;block-size:1em;margin-block-end:8px;animation:sk 1.4s infinite}
+@keyframes sk{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
+nav.bottom{position:fixed;inset-block-end:0;inset-inline:0;display:flex;background:var(--surface);
+  border-block-start:1px solid var(--border);padding-block-end:env(safe-area-inset-bottom)}
+nav.bottom a{flex:1;min-block-size:var(--tap);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;font-size:.75rem;color:var(--ink-muted);text-decoration:none;padding:6px}
+nav.bottom a[aria-current="page"]{color:var(--brand);font-weight:700}
+nav.bottom .ico{font-size:1.2rem}
+.badge{padding:1px 7px;font-size:.7rem;margin-inline-start:4px}
+.fab{position:fixed;inset-block-end:82px;inset-inline-start:12px;min-inline-size:var(--tap);
+  min-block-size:var(--tap);border-radius:999px;background:var(--surface);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;
+  color:var(--brand);font-weight:700;text-decoration:none;font-size:.85rem;
+  box-shadow:0 2px 10px rgba(0,0,0,.12);opacity:.96}
+/* The help button floats at the inline-START. In RTL that is the LEFT — the end
+   of every line, where whitespace usually is. At inset-inline-end it sat exactly
+   where Arabic text begins and covered the first words of whatever card was
+   under it. An LTR habit that reads as a layout bug in Arabic. */
+.steps{display:flex;gap:6px;margin-block-end:16px}
+.steps i{flex:1;block-size:5px;border-radius:3px;background:var(--surface-2)}
+.steps i.on{background:var(--brand)}
+.receipt-img{background:var(--surface-2);border-radius:10px;block-size:150px;display:grid;
+  place-items:center;color:var(--ink-muted);margin-block-end:10px}
+
+/* ---- CP-6: content, search, albums, tickets ------------------------------
+   Every rule here uses logical properties. tools/lint-rtl.mjs fails the build
+   on a physical one, which is what keeps an LTR habit from shipping. */
+.searchbar{display:flex;gap:8px;margin-block-start:12px}
+.searchbar input{flex:1;min-inline-size:0}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-block:4px;margin-block-end:12px;
+  scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{white-space:nowrap;padding:8px 14px;min-block-size:var(--tap);display:flex;align-items:center;
+  border-radius:999px;background:var(--surface);border:1px solid var(--border);
+  color:var(--ink-muted);text-decoration:none;font-size:.9rem;font-weight:600}
+.tab.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.row-link{text-decoration:none;color:inherit}
+.row-link:hover{background:var(--surface-2)}
+.row-end{margin-inline-start:auto;color:var(--ink-muted);flex:none}
+.backlink{display:inline-flex;align-items:center;min-block-size:var(--tap);
+  color:var(--brand);text-decoration:none;font-weight:600;margin-block-end:8px}
+.prose{line-height:1.85}
+.prose p{margin-block:0 12px}
+.pill{display:inline-block;background:var(--accent);color:#fff;border-radius:999px;
+  font-size:.7rem;font-weight:700;padding:2px 8px;margin-inline-start:6px}
+.pill-info{background:var(--info-soft);color:var(--info)}
+.chipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.chiplink{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  min-block-size:var(--tap);padding:10px 14px;border-radius:10px;background:var(--surface-2);
+  border:1px solid var(--border);color:var(--ink);text-decoration:none;font-weight:600}
+.chiplink .count{color:var(--ink-muted);font-size:.8rem}
+.snippet{display:block;margin-block-start:4px;font-size:.85rem}
+.photogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.photo{margin:0}
+/* inline-size/block-size rather than width/height: the lint allows the physical
+   pair only inside SVG, and an image that ignores its container breaks RTL
+   flow the same way a physical margin does. */
+.photo img{inline-size:100%;block-size:auto;aspect-ratio:4/3;object-fit:cover;
+  border-radius:10px;background:var(--surface-2)}
+.photo figcaption{font-size:.8rem;color:var(--ink-muted);margin-block-start:4px}
+.callout{background:var(--surface-2);border-inline-start:3px solid var(--brand);
+  border-radius:8px;padding:10px 12px;margin-block-start:12px}
+.summary-btn{min-block-size:var(--tap);display:flex;align-items:center;font-weight:700;
+  color:var(--brand);cursor:pointer;list-style:none}
+.summary-btn::-webkit-details-marker{display:none}
+.inline-form{display:flex;gap:6px;flex-wrap:wrap;margin-block:8px 4px}
+.inline-form input,.inline-form select{flex:1;min-inline-size:100px}
+.btn-sm{min-block-size:36px;padding:4px 10px;font-size:.8rem}
+.check{display:flex;align-items:center;gap:8px;min-block-size:var(--tap);font-weight:600}
+.chip-ok{background:var(--ok-soft);color:var(--ok)}
+.chip-warn{background:var(--warn-soft);color:var(--warn)}
+.chip-danger{background:var(--danger-soft);color:var(--danger)}
+.chip-info{background:var(--info-soft);color:var(--info)}
+.chip-muted{background:var(--surface-2);color:var(--ink-muted)}
+
+/* ---- header controls: theme + text size ---------------------------------- */
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header .htext{flex:1;min-inline-size:0}
+.hctl{display:flex;gap:6px;flex:none}
+.hctl{display:flex;gap:6px;flex:none}
+.hctl form{margin:0}
+/* Plain characters, not emoji: 🔠 renders as a tofu box on a stock Android
+   without an emoji font, which is exactly the five-year-old phone this app is
+   designed for. "A" and ◐ are in every font. */
+.hctl button{min-inline-size:var(--tap);min-block-size:var(--tap);border:0;border-radius:12px;
+  background:rgba(255,255,255,.16);color:inherit;font:inherit;font-size:1.05rem;font-weight:700;
+  cursor:pointer;display:grid;place-items:center;padding:0 10px}
+.hctl button:hover{background:rgba(255,255,255,.26)}
+
+/* ---- desktop ------------------------------------------------------------- */
+/* Below 900px this is a phone app with a bottom bar, which is what almost every
+   resident will use. Above it, the bottom bar becomes a side rail and the
+   content gets a second column — the board reviews receipts on a laptop, and a
+   760px ribbon down the middle of a 27" screen wastes the space where the
+   receipt image and its details want to sit next to each other. */
+@media (min-width:900px){
+  body{padding-block-end:0}
+  header{position:sticky;inset-block-start:0;z-index:20}
+  nav.bottom{position:sticky;inset-block-start:0;inset-block-end:auto;flex-direction:column;
+    align-items:stretch;border-block-start:0;border-inline-end:1px solid var(--border);
+    inline-size:210px;block-size:100vh;padding:12px 8px;gap:4px}
+  nav.bottom a{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;
+    font-size:1rem;border-radius:12px;padding:10px 14px}
+  nav.bottom a[aria-current="page"]{background:var(--brand-soft)}
+  .shell{display:flex;align-items:flex-start}
+  main{flex:1;max-width:900px;padding-block-end:40px}
+  .fab{inset-block-end:20px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+}
+@media (min-width:1280px){ main{max-width:1080px} }
+
+/* ---- motion restraint ---------------------------------------------------- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+</style>
+
+</head>
+<body>
+<a class="skip" href="#main">تخطّي للمحتوى</a>
+<header>
+  <div class="htext"><h1>بوابة قرية الأطباء</h1><p>عجيبة، مرسى مطروح</p></div>
+  <div class="hctl">
+    <form method="post" action="/prefs">
+      <input type="hidden" name="cycle" value="fs">
+      <input type="hidden" name="next" value="/units/DEMOUNT0000000000000000005/statement">
+      <button type="submit" aria-label="حجم الخط"
+              title="حجم الخط"><span aria-hidden="true">A</span></button>
+    </form>
+    <form method="post" action="/prefs">
+      <input type="hidden" name="cycle" value="theme">
+      <input type="hidden" name="next" value="/units/DEMOUNT0000000000000000005/statement">
+      <button type="submit" aria-label="الوضع الليلي أو النهاري"
+              title="الوضع الليلي أو النهاري">◐</button>
+    </form>
+  </div>
+</header>
+<div class="shell">
+
+<nav class="bottom" aria-label="القائمة">
+  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/payments" aria-current="page"><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
+  <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
+  <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
+  <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
+</nav>
+<a class="fab" href="/help">💬 محتاج مساعدة؟</a>
+<main id="main">
+
+
+<div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
+
+
+<style>
+.stmt-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  align-items:flex-start;margin-block-end:16px}
+.stmt-tot{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;
+  margin-block:16px}
+.stmt-tot div{background:var(--surface-2);border-radius:10px;padding:10px 12px}
+.stmt-tot b{display:block;font-size:1.15rem;margin-block-start:2px}
+.stmt-tot .lbl{font-size:.8rem;color:var(--ink-muted)}
+.stmt-tot .due b{color:var(--danger)}
+table.stmt{inline-size:100%;border-collapse:collapse;font-size:.9rem}
+table.stmt th,table.stmt td{padding:8px 6px;border-block-end:1px solid var(--border);
+  text-align:start;vertical-align:top}
+table.stmt thead th{color:var(--ink-muted);font-size:.8rem}
+table.stmt tfoot td{font-weight:700;border-block-start:2px solid var(--border)}
+tr.k-waiver td,tr.k-pending td{color:var(--ink-muted)}
+@media print{
+  nav.bottom,.fab,.backlink,.no-print,.banner.demo{display:none!important}
+  body{background:#fff;font-size:11pt;padding-block-end:0}
+  .card{box-shadow:none;border:0;padding:0;margin-block-end:12px;break-inside:auto}
+  table.stmt thead{display:table-header-group}
+  tr{break-inside:avoid}
+  @page{margin:14mm}
+}
+</style>
+<a class="backlink" href="/payments">→ إيصالاتي</a>
+<div class="card">
+  <div class="stmt-head">
+    <div>
+      <h2 style="margin:0">كشف حساب سنة <bdi dir="ltr" class="num">2026</bdi></h2>
+      <p class="muted" style="margin:4px 0 0">
+        عمارة 14 — 5 · د. عمرو شاهين
+      </p>
+      <p class="muted" style="margin:2px 0 0;font-size:.8rem">
+        اتطبع في <bdi dir="ltr" class="num">4</bdi> أغسطس <bdi dir="ltr" class="num">2026</bdi> — بوابة قرية الأطباء
+      </p>
+    </div>
+    <div class="no-print btn-row">
+      <button class="btn btn-2" onclick="window.print()">🖨️ اطبع أو احفظ PDF</button>
+    </div>
+  </div>
+
+  <div class="no-print" style="margin-block-end:12px">
+    <a class="tab on"
+      href="/units/DEMOUNT0000000000000000005/statement?year=2026"
+      style="display:inline-flex;margin-inline-end:6px"><bdi dir="ltr" class="num">2026</bdi></a>
+  </div>
+
+  <div class="stmt-tot">
+    <div><span class="lbl">المطلوب</span><b><bdi dir="ltr" class="num">6,000.00</bdi> <span class="cur">ج.م</span></b></div>
+    <div><span class="lbl">المدفوع والمعتمد</span><b><bdi dir="ltr" class="num">3,000.00</bdi> <span class="cur">ج.م</span></b></div>
+    <div class="due"><span class="lbl">المتبقي عليك</span><b><bdi dir="ltr" class="num">3,000.00</bdi> <span class="cur">ج.م</span></b></div>
+    
+    
+  </div>
+
+  <table class="stmt">
+    <thead><tr>
+      <th>التاريخ</th><th>البيان</th><th>المرجع</th>
+      <th style="text-align:end">مطلوب</th><th style="text-align:end">مدفوع</th>
+    </tr></thead>
+    <tbody>
+      <tr class="k-payment">
+        <td><bdi dir="ltr" class="num">2026-02-10</bdi></td>
+        <td>اشتراك الصيانة السنوي</td>
+        <td><bdi dir="ltr" class="num">R-2026-00150</bdi></td>
+        <td style="text-align:end">—</td>
+        <td style="text-align:end"><bdi dir="ltr" class="num">3,000.00</bdi> <span class="cur">ج.م</span></td>
+      </tr><tr class="k-due">
+        <td><bdi dir="ltr" class="num">2026-03-31</bdi></td>
+        <td>اشتراك الصيانة السنوي 2026</td>
+        <td>—</td>
+        <td style="text-align:end"><bdi dir="ltr" class="num">6,000.00</bdi> <span class="cur">ج.م</span></td>
+        <td style="text-align:end">—</td>
+      </tr>
+    </tbody>
+    <tfoot><tr>
+      <td colspan="3">الإجمالي</td>
+      <td style="text-align:end"><bdi dir="ltr" class="num">6,000.00</bdi> <span class="cur">ج.م</span></td>
+      <td style="text-align:end"><bdi dir="ltr" class="num">3,000.00</bdi> <span class="cur">ج.م</span></td>
+    </tr></tfoot>
+  </table>
+
+  <p class="muted" style="margin-block-start:14px;font-size:.8rem">
+    الإيصالات اللي لسه تحت المراجعة بتظهر في الكشف بس مش بتتحسب في المدفوع،
+    عشان الرقم اللي قدامك يبقى هو اللي القرية استلمته فعلًا.
+  </p>
+</div>
+</main>
+</div>
+
+</body></html>

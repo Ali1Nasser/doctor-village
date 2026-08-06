@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>بوابة قرية الأطباء — نموذج أولي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
+  --brand:#0E5C63; --brand-ink:#fff; --brand-soft:#E3F0F1; --accent:#C1873B;
+  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#A96A00; --warn-soft:#FBEFD9;
+  --danger:#B3261E; --danger-soft:#FBE9E7; --info:#1F5FA8; --info-soft:#E5EFFA;
+  --border:#DFDCD5; --radius:14px; --tap:48px;
+  --fs-body:17px; --shadow:0 1px 2px rgba(31,36,33,.06),0 8px 24px rgba(31,36,33,.06);
+}
+html[data-theme="dark"]{
+  --bg:#14171A; --surface:#1D2226; --surface-2:#262C31; --ink:#ECEFEA; --ink-muted:#A3AAA5;
+  --brand:#4FB3BC; --brand-ink:#0B2225; --brand-soft:#123B40; --border:#333B40;
+  --ok:#5DD498; --ok-soft:#123528; --warn:#E9B15C; --warn-soft:#3A2C11;
+  --danger:#F1877F; --danger-soft:#3B1B18; --info:#7EB2EE; --info-soft:#15263A;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'IBM Plex Sans Arabic',system-ui,sans-serif; background:var(--bg); color:var(--ink);
+  font-size:var(--fs-body); line-height:1.75; -webkit-font-smoothing:antialiased;
+  padding-bottom:88px;
+}
+bdi{font-variant-numeric:tabular-nums; unicode-bidi:isolate}
+.wrap{max-width:520px;margin:0 auto;padding:16px}
+.desktop-note{display:none}
+@media(min-width:900px){
+  .wrap{max-width:960px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+}
+/* ---------- header ---------- */
+header.top{
+  position:sticky;top:0;z-index:30;background:var(--brand);color:var(--brand-ink);
+  padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow)
+}
+header.top .logo{width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,.16);
+  display:grid;place-items:center;font-size:20px;flex:none}
+header.top h1{font-size:18px;font-weight:600;line-height:1.3}
+header.top small{display:block;font-weight:400;opacity:.82;font-size:13px;line-height:1.3}
+header.top .spacer{margin-inline-start:auto}
+.iconbtn{min-width:44px;min-height:44px;border:0;border-radius:12px;background:rgba(255,255,255,.14);
+  color:inherit;font-size:18px;cursor:pointer;display:grid;place-items:center}
+/* ---------- cards ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.card h2{font-size:19px;font-weight:600;margin-bottom:4px}
+.card h3{font-size:17px;font-weight:600;margin-bottom:10px}
+.muted{color:var(--ink-muted);font-size:15px}
+.big-num{font-size:34px;font-weight:700;letter-spacing:-.5px;line-height:1.25}
+.hero{background:linear-gradient(160deg,var(--brand) 0%,#0A464B 100%);color:#fff;border:0}
+.hero .muted{color:rgba(255,255,255,.8)}
+.hero .big-num{color:#fff}
+/* ---------- buttons ---------- */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:var(--tap);
+  width:100%;border:0;border-radius:12px;background:var(--brand);color:var(--brand-ink);
+  font:inherit;font-weight:600;cursor:pointer;padding:0 18px;transition:transform .08s}
+.btn:active{transform:scale(.985)}
+.btn.lg{min-height:58px;font-size:19px}
+.btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--border)}
+.btn.ok{background:var(--ok);color:#fff}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.info{background:var(--info);color:#fff}
+.btn.white{background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.3)}
+.btn-row{display:flex;gap:8px}
+.btn-row .btn{flex:1;padding:0 8px;font-size:15px}
+/* ---------- chips ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 12px;
+  font-size:14px;font-weight:600;white-space:nowrap}
+.chip.pending{background:var(--warn-soft);color:var(--warn)}
+.chip.approved{background:var(--ok-soft);color:var(--ok)}
+.chip.rejected{background:var(--danger-soft);color:var(--danger)}
+.chip.info{background:var(--info-soft);color:var(--info)}
+/* ---------- list rows ---------- */
+.row{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.row .ic{width:44px;height:44px;border-radius:12px;background:var(--surface-2);display:grid;
+  place-items:center;font-size:20px;flex:none}
+.row .body{flex:1;min-width:0}
+.row .body b{font-weight:600;display:block;font-size:16px}
+.row .end{text-align:end;flex:none;min-width:104px}
+.row .end .chip{font-size:13px;padding:3px 9px;margin-top:4px}
+/* ---------- bars ---------- */
+.bar{height:11px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--brand)}
+.legend{display:flex;justify-content:space-between;font-size:14px;color:var(--ink-muted);margin-top:4px}
+/* ---------- table ---------- */
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:11px 8px;text-align:start;border-bottom:1px solid var(--border)}
+th{font-weight:600;color:var(--ink-muted);font-size:14px}
+/* ---------- forms ---------- */
+label{display:block;font-weight:600;margin-bottom:8px;font-size:16px}
+input,select,textarea{width:100%;min-height:var(--tap);border:1.5px solid var(--border);
+  border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;padding:10px 14px}
+input:focus,select:focus{outline:3px solid var(--brand-soft);border-color:var(--brand)}
+.field{margin-bottom:18px}
+.otp{display:flex;gap:8px;direction:ltr;justify-content:center}
+.otp input{width:48px;min-width:48px;height:58px;text-align:center;font-size:24px;font-weight:700;padding:0}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tile{border:1.5px solid var(--border);background:var(--surface);border-radius:12px;padding:14px 10px;
+  text-align:center;cursor:pointer;font-weight:600;font-size:15px;min-height:88px;display:grid;
+  place-content:center;gap:6px;color:var(--ink)}
+.tile span{font-size:24px}
+.tile.sel{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+/* ---------- nav ---------- */
+nav.bottom{position:fixed;inset-inline:0;bottom:0;z-index:40;background:var(--surface);
+  border-top:1px solid var(--border);display:flex;padding:6px 4px env(safe-area-inset-bottom)}
+nav.bottom button{flex:1;min-height:var(--tap);border:0;background:0;color:var(--ink-muted);
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;display:grid;gap:2px;justify-items:center;padding:6px 0}
+nav.bottom button span{font-size:21px;line-height:1}
+nav.bottom button.on{color:var(--brand)}
+/* ---------- misc ---------- */
+.empty{text-align:center;padding:34px 18px;color:var(--ink-muted)}
+.empty span{font-size:44px;display:block;margin-bottom:10px}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 14px;
+  font-size:15px;font-weight:600;margin-bottom:14px}
+.receipt-img{width:100%;height:190px;border-radius:12px;background:
+  repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 12px,var(--bg) 12px,var(--bg) 24px);
+  display:grid;place-items:center;color:var(--ink-muted);font-size:15px;border:1px solid var(--border);margin-bottom:14px}
+.steps{display:flex;gap:6px;margin-bottom:18px}
+.steps i{flex:1;height:5px;border-radius:99px;background:var(--surface-2)}
+.steps i.on{background:var(--brand)}
+.help-fab{position:fixed;inset-inline-end:14px;bottom:104px;opacity:.96;z-index:35;min-height:52px;
+  border-radius:99px;background:var(--ok);color:#fff;border:0;font:inherit;font-weight:600;
+  padding:0 18px;box-shadow:var(--shadow);cursor:pointer}
+.screen{display:none;animation:in .18s ease}
+.screen.on{display:block}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.pill{display:inline-block;background:var(--accent);color:#fff;border-radius:99px;font-size:12px;
+  font-weight:700;padding:2px 9px;margin-inline-start:6px}
+.note{font-size:14px;color:var(--ink-muted);background:var(--surface-2);padding:10px 12px;
+  border-radius:10px;border-inline-start:3px solid var(--brand)}
+.roleswitch{display:flex;gap:6px;margin-bottom:14px}
+.roleswitch button{flex:1;min-height:40px;border:1px solid var(--border);background:var(--surface);
+  border-radius:10px;font:inherit;font-size:14px;font-weight:600;color:var(--ink-muted);cursor:pointer}
+.roleswitch button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+</style>
+</head>
+<body>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div class="screen on" id="s-login">
+  <div class="wrap" style="padding-top:48px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:78px;height:78px;border-radius:22px;background:var(--brand);color:#fff;
+        display:grid;place-items:center;font-size:38px;margin:0 auto 16px">🏘️</div>
+      <h1 style="font-size:25px;font-weight:700">بوابة قرية الأطباء</h1>
+      <p class="muted">عجيبة — مرسى مطروح</p>
+    </div>
+    <div class="card">
+      <div class="field">
+        <label for="ph">رقم الموبايل</label>
+        <input id="ph" type="tel" dir="ltr" placeholder="01xxxxxxxxx" value="01012345678"
+               style="font-size:21px;text-align:center;letter-spacing:1px">
+        <p class="muted" style="margin-top:8px">من غير باسورد ولا إيميل ولا يوزرنيم.</p>
+      </div>
+      <button class="btn lg" style="background:#25D366;color:#06301A" onclick="go('s-otp')">
+        🟢 دخول عن طريق واتساب</button>
+      <p class="muted" style="text-align:center;margin-top:12px;font-size:15px">
+        هيفتحلك واتساب برسالة جاهزة — اضغط «إرسال» بس وهتدخل على طول.</p>
+    </div>
+    <div class="note">حسابك جاهز من إدارة القرية. لو رقمك مش مسجّل، كلّم أي حد من مجلس الإدارة وهيضيفك.</div>
+    <button class="btn ghost" style="margin-top:14px" onclick="alert('هيفتح واتساب لمجلس الإدارة')">
+      💬 محتاج مساعدة؟
+    </button>
+  </div>
+</div>
+
+<!-- ══════════ OTP ══════════ -->
+<div class="screen" id="s-otp">
+  <div class="wrap" style="padding-top:48px">
+    <button class="btn ghost" style="width:auto;margin-bottom:22px" onclick="go('s-login')">→ رجوع</button>
+    <div class="card">
+      <h2>افتح واتساب واضغط «إرسال»</h2>
+      <p class="muted" style="margin-bottom:18px">
+        الرسالة جاهزة — مش هتكتب حاجة. أول ما تبعتها هتدخل حسابك على طول.</p>
+
+      <div style="background:#E7FFDB;border:1px solid #B7E4A0;border-radius:14px;padding:14px;
+        margin-bottom:18px;color:#0B3D1E">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">📱 واتساب — قرية الأطباء</div>
+        <div style="background:#fff;border-radius:10px;padding:10px 12px;font-size:16px">
+          دخول <bdi>K7F2QX</bdi></div>
+        <div style="text-align:end;margin-top:8px;font-size:22px">▶️</div>
+      </div>
+
+      <button class="btn lg" style="background:#25D366;color:#06301A" onclick="go('s-wait')">
+        🟢 افتح واتساب دلوقتي</button>
+      <button class="btn ghost" style="margin-top:10px" onclick="go('s-home');setNav(0)">
+        (في النموذج ده: تخطّى وادخل)</button>
+      <p class="muted" style="text-align:center;margin-top:14px;font-size:15px">
+        معندكش واتساب؟ <b>كلّم مجلس الإدارة</b> وهيبعتلك لينك دخول شخصي.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ WAITING ══════════ -->
+<div class="screen" id="s-wait">
+  <div class="wrap" style="padding-top:64px">
+    <div class="card" style="text-align:center">
+      <div style="font-size:56px">⏳</div>
+      <h2 style="margin:12px 0">مستنيين رسالتك…</h2>
+      <p class="muted" style="margin-bottom:22px">
+        ابعت الرسالة من واتساب وارجع هنا — الصفحة هتفتح لوحدها.</p>
+      <div class="bar"><i style="width:65%"></i></div>
+      <button class="btn lg" style="margin-top:22px" onclick="go('s-home');setNav(0)">
+        (النموذج: تم التحقق ✅)</button>
+      <button class="btn ghost" style="margin-top:10px" onclick="go('s-login')">غيّر الرقم</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ APP SHELL ══════════ -->
+<div id="app" style="display:none">
+<header class="top">
+  <div class="logo">🏘️</div>
+  <div>
+    <h1>قرية الأطباء</h1>
+    <small id="whoami">د. أحمد محمود · عمارة 5 شقة 12</small>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" onclick="toggleTheme()" title="الوضع الليلي">🌙</button>
+  <button class="iconbtn" onclick="alert('إشعارات')" title="إشعارات">🔔</button>
+</header>
+
+<!-- ---------- HOME ---------- -->
+<div class="screen" id="s-home">
+ <div class="wrap">
+  <div class="roleswitch">
+    <button class="on" onclick="setRole(this,'ساكن')">👤 ساكن</button>
+    <button onclick="setRole(this,'أدمن')">🛡️ أدمن</button>
+    <button onclick="setRole(this,'مشغّل')">🔧 مشغّل</button>
+  </div>
+
+  <div class="banner">📌 اجتماع الجمعية العمومية يوم الجمعة 21 أغسطس الساعة 6 م بالنادي.</div>
+
+  <div class="grid2">
+   <div>
+    <div class="card hero">
+      <p class="muted">المتبقّي عليك لسنة <bdi>2026</bdi></p>
+      <div class="big-num"><bdi>2,500.00</bdi> ج.م</div>
+      <div class="legend" style="color:rgba(255,255,255,.85)">
+        <span>مدفوع <bdi>1,500</bdi></span><span>المطلوب <bdi>4,000</bdi></span></div>
+      <div class="bar" style="background:rgba(255,255,255,.22)">
+        <i style="width:37.5%;background:#fff"></i></div>
+      <button class="btn white lg" style="margin-top:18px" onclick="go('s-pay');setNav(1)">
+        📤 دفع جديد — ارفع صورة التحويل</button>
+    </div>
+
+    <div class="card">
+      <h3>آخر إيصالاتك</h3>
+      <div class="row"><div class="ic">✅</div><div class="body">
+        <b>اشتراك الصيانة السنوي</b><span class="muted">12 يوليو 2026 · إنستا باي</span></div>
+        <div class="end"><b><bdi>1,500</bdi> ج.م</b><br><span class="chip approved">تم الاعتماد</span></div></div>
+      <div class="row"><div class="ic">⏳</div><div class="body">
+        <b>مساهمة تطوير المدخل</b><span class="muted">28 يوليو 2026 · تحويل بنكي</span></div>
+        <div class="end"><b><bdi>500</bdi> ج.م</b><br><span class="chip pending">قيد المراجعة</span></div></div>
+      <button class="btn ghost" style="margin-top:12px" onclick="go('s-payments');setNav(1)">
+        شوف كل الإيصالات</button>
+    </div>
+   </div>
+
+   <div>
+    <div class="card">
+      <h3>فلوس القرية النهارده</h3>
+      <p class="muted">ده اللي متبقّي في خزنة القرية</p>
+      <div class="big-num" style="color:var(--ok)"><bdi>318,400.00</bdi> ج.م</div>
+      <div class="row" style="margin-top:10px">
+        <div class="ic" style="background:var(--ok-soft);color:var(--ok)">↓</div>
+        <div class="body"><b>إجمالي الإيرادات</b><span class="muted">من 214 وحدة</span></div>
+        <div class="end"><b><bdi>842,000</bdi></b></div></div>
+      <div class="row">
+        <div class="ic" style="background:var(--danger-soft);color:var(--danger)">↑</div>
+        <div class="body"><b>إجمالي المصروفات</b><span class="muted">من أول يناير</span></div>
+        <div class="end"><b><bdi>523,600</bdi></b></div></div>
+      <button class="btn ghost" style="margin-top:12px" onclick="go('s-finance');setNav(2)">
+        شوف التفاصيل كاملة</button>
+    </div>
+
+    <div class="card">
+      <h3>آخر الأخبار</h3>
+      <div class="row"><div class="ic">📰</div><div class="body">
+        <b>تشغيل مواتير المياه الجديدة</b><span class="muted">29 يوليو 2026</span></div></div>
+      <div class="row"><div class="ic">📋</div><div class="body">
+        <b>قرار مجلس الإدارة رقم 14</b><span class="muted">21 يوليو 2026</span></div></div>
+      <div class="row"><div class="ic">📸</div><div class="body">
+        <b>ألبوم: ترميم السور الخارجي</b><span class="muted">14 يوليو 2026 · 18 صورة</span></div></div>
+      <button class="btn ghost" style="margin-top:12px" onclick="go('s-news');setNav(3)">كل الأخبار</button>
+    </div>
+   </div>
+  </div>
+ </div>
+</div>
+
+<!-- ---------- PAY ---------- -->
+<div class="screen" id="s-pay">
+ <div class="wrap">
+  <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+  <div class="card">
+    <h2>دفع جديد</h2>
+    <p class="muted" style="margin-bottom:18px">خطوة 3 من 5 — دفعت إزاي؟</p>
+
+    <div class="field">
+      <label>المبلغ</label>
+      <input dir="ltr" value="1,500.00" style="font-size:26px;font-weight:700;text-align:center">
+    </div>
+
+    <div class="field">
+      <label>على إيه؟</label>
+      <div class="tiles">
+        <div class="tile sel"><span>🧾</span>اشتراك الصيانة</div>
+        <div class="tile"><span>🏦</span>الوديعة</div>
+        <div class="tile"><span>💧</span>المياه</div>
+        <div class="tile"><span>🎁</span>مساهمة خاصة</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>طريقة الدفع</label>
+      <div class="tiles">
+        <div class="tile sel"><span>📱</span>إنستا باي</div>
+        <div class="tile"><span>🏛️</span>تحويل بنكي</div>
+        <div class="tile"><span>📞</span>فودافون كاش</div>
+        <div class="tile"><span>💵</span>كاش</div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-bottom:18px">
+      <b>بيانات التحويل:</b><br>
+      إنستا باي: <bdi>qaryat.atebaa@instapay</bdi> 📋<br>
+      حساب بنكي: <bdi>1234 5678 9012 3456</bdi> — بنك مصر 📋
+    </div>
+
+    <div class="field">
+      <label>تاريخ التحويل</label>
+      <input type="date" value="2026-08-03">
+    </div>
+
+    <div class="field">
+      <label>صورة التحويل</label>
+      <div class="receipt-img">📷 اضغط لتصوير الإيصال أو اختره من الصور</div>
+      <div class="btn-row">
+        <button class="btn ghost">📷 صوّر دلوقتي</button>
+        <button class="btn ghost">🖼️ من الصور</button>
+      </div>
+    </div>
+
+    <button class="btn lg" onclick="go('s-success')">تأكيد الإرسال</button>
+  </div>
+ </div>
+</div>
+
+<!-- ---------- SUCCESS ---------- -->
+<div class="screen" id="s-success">
+ <div class="wrap" style="padding-top:40px">
+  <div class="card" style="text-align:center">
+    <div style="font-size:62px">✅</div>
+    <h2 style="margin:10px 0">تم استلام إيصالك</h2>
+    <p style="font-size:21px;font-weight:700;color:var(--brand)">رقم <bdi>R-2026-00417</bdi></p>
+    <p class="muted" style="margin:14px 0 22px">
+      هيتراجع خلال 48 ساعة، وهنبعتلك رسالة على واتساب أول ما يتصدّق عليه.</p>
+    <button class="btn lg" onclick="go('s-payments');setNav(1)">شوف إيصالاتي</button>
+    <button class="btn ghost" style="margin-top:10px" onclick="go('s-home');setNav(0)">ارجع للرئيسية</button>
+  </div>
+ </div>
+</div>
+
+<!-- ---------- PAYMENTS ---------- -->
+<div class="screen" id="s-payments">
+ <div class="wrap">
+  <div class="card">
+    <h2>إيصالاتي</h2>
+    <p class="muted" style="margin-bottom:14px">سنة <bdi>2026</bdi> — إجمالي مدفوع <b><bdi>2,000.00</bdi> ج.م</b></p>
+    <div class="row"><div class="ic">⏳</div><div class="body">
+      <b>مساهمة تطوير المدخل</b>
+      <span class="muted"><bdi>R-2026-00417</bdi> · 28 يوليو 2026 · تحويل بنكي</span></div>
+      <div class="end"><b><bdi>500</bdi></b><br><span class="chip pending">قيد المراجعة</span></div></div>
+    <div class="row"><div class="ic">✅</div><div class="body">
+      <b>اشتراك الصيانة السنوي</b>
+      <span class="muted"><bdi>R-2026-00301</bdi> · 12 يوليو 2026 · إنستا باي</span></div>
+      <div class="end"><b><bdi>1,500</bdi></b><br><span class="chip approved">تم الاعتماد</span></div></div>
+    <div class="row"><div class="ic">❌</div><div class="body">
+      <b>اشتراك الصيانة السنوي</b>
+      <span class="muted"><bdi>R-2026-00288</bdi> · 9 يوليو 2026</span>
+      <span style="color:var(--danger);font-size:14px">السبب: الصورة مش واضحة، المبلغ مش ظاهر</span></div>
+      <div class="end"><b><bdi>1,500</bdi></b><br><span class="chip rejected">مرفوض</span></div></div>
+    <button class="btn ghost" style="margin-top:14px">📄 حمّل كشف حساب <bdi>2026</bdi> PDF</button>
+  </div>
+  <div class="card">
+    <h3>المطلوب منك</h3>
+    <div class="row"><div class="ic">🧾</div><div class="body">
+      <b>اشتراك الصيانة <bdi>2026</bdi></b><span class="muted">آخر موعد 30 سبتمبر 2026</span></div>
+      <div class="end"><b><bdi>2,500</bdi></b><br><span class="chip pending">متبقّي</span></div></div>
+  </div>
+ </div>
+</div>
+
+<!-- ---------- FINANCE ---------- -->
+<div class="screen" id="s-finance">
+ <div class="wrap">
+  <div class="card hero">
+    <p class="muted">رصيد خزنة القرية النهارده</p>
+    <div class="big-num"><bdi>318,400.00</bdi> ج.م</div>
+    <div class="legend" style="color:rgba(255,255,255,.85)">
+      <span>إيرادات <bdi>842,000</bdi></span><span>مصروفات <bdi>523,600</bdi></span></div>
+  </div>
+
+  <div class="grid2">
+   <div class="card">
+    <h3>المصروفات حسب الفئة</h3>
+    <p class="muted" style="margin-bottom:14px">من 1 يناير إلى 3 أغسطس 2026</p>
+    <div id="bars"></div>
+    <button class="btn ghost" style="margin-top:14px" onclick="toggleTable()">🔢 شوف الأرقام</button>
+    <div id="numtable" style="display:none;margin-top:12px">
+      <table><thead><tr><th>الفئة</th><th>المبلغ</th><th>%</th></tr></thead><tbody id="tb"></tbody></table>
+    </div>
+   </div>
+
+   <div>
+    <div class="card">
+      <h3>حالة التحصيل لكل عمارة</h3>
+      <table>
+        <thead><tr><th>العمارة</th><th>الوحدات</th><th>محصّل</th><th>النسبة</th></tr></thead>
+        <tbody>
+          <tr><td>عمارة 1</td><td><bdi>24</bdi></td><td><bdi>92,000</bdi></td><td><bdi>96%</bdi></td></tr>
+          <tr><td>عمارة 2</td><td><bdi>24</bdi></td><td><bdi>78,000</bdi></td><td><bdi>81%</bdi></td></tr>
+          <tr><td>عمارة 3</td><td><bdi>18</bdi></td><td><bdi>54,000</bdi></td><td><bdi>75%</bdi></td></tr>
+          <tr><td>عمارة 4</td><td><bdi>20</bdi></td><td><bdi>44,000</bdi></td><td><bdi>55%</bdi></td></tr>
+          <tr><td>عمارة 5</td><td><bdi>22</bdi></td><td><bdi>81,000</bdi></td><td><bdi>92%</bdi></td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="margin-top:10px;font-size:14px">
+        أرقام إجمالية فقط — من غير أسماء ولا صور إيصالات.</p>
+    </div>
+
+    <div class="card">
+      <h3>آخر الحركات</h3>
+      <div class="row"><div class="ic" style="background:var(--danger-soft);color:var(--danger)">↑</div>
+        <div class="body"><b>عربية مياه حلوة</b><span class="muted">المياه · 2 أغسطس · المورّد: أبو زيد</span></div>
+        <div class="end"><b><bdi>3,200</bdi></b></div></div>
+      <div class="row"><div class="ic" style="background:var(--ok-soft);color:var(--ok)">↓</div>
+        <div class="body"><b>اشتراك — عمارة 5 شقة 12</b><span class="muted">اشتراك سنوي · 1 أغسطس</span></div>
+        <div class="end"><b><bdi>1,500</bdi></b></div></div>
+      <div class="row"><div class="ic" style="background:var(--danger-soft);color:var(--danger)">↑</div>
+        <div class="body"><b>تغيير 14 لمبة إنارة</b><span class="muted">الصيانة · 31 يوليو</span></div>
+        <div class="end"><b><bdi>1,850</bdi></b></div></div>
+      <div class="row"><div class="ic" style="background:var(--danger-soft);color:var(--danger)">↑</div>
+        <div class="body"><b>مرتبات العمالة — يوليو</b><span class="muted">مرتبات · 30 يوليو · 6 أفراد</span></div>
+        <div class="end"><b><bdi>28,000</bdi></b></div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+</div>
+
+<!-- ---------- ADMIN REVIEW ---------- -->
+<div class="screen" id="s-admin">
+ <div class="wrap">
+  <div class="banner" style="background:var(--brand-soft);color:var(--brand)">
+    🛡️ شاشة الأدمن — <bdi>7</bdi> إيصالات مستنية المراجعة</div>
+  <div class="card">
+    <div class="receipt-img">🧾 صورة الإيصال — اضغط للتكبير</div>
+    <h3 style="margin-bottom:2px">د. أحمد محمود</h3>
+    <p class="muted">عمارة 5 · شقة 12 · <bdi>R-2026-00417</bdi></p>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:14px 0">
+      <span class="big-num" style="font-size:28px"><bdi>1,500.00</bdi> ج.م</span>
+      <span class="chip pending">قيد المراجعة</span>
+    </div>
+    <table>
+      <tr><th>الفئة</th><td>اشتراك الصيانة السنوي</td></tr>
+      <tr><th>الطريقة</th><td>إنستا باي</td></tr>
+      <tr><th>تاريخ التحويل</th><td><bdi>12/07/2026</bdi></td></tr>
+      <tr><th>رقم مرجعي</th><td><bdi>88213</bdi></td></tr>
+      <tr><th>ملاحظة الساكن</th><td>دفعت عن سنة 2026</td></tr>
+    </table>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn ok" onclick="alert('تم الاعتماد — الرصيد اتحدّث')">✅ اعتماد</button>
+      <button class="btn info" onclick="alert('هيتبعت للساكن')">❔ توضيح</button>
+      <button class="btn danger" onclick="alert('لازم سبب')">❌ رفض</button>
+    </div>
+    <button class="btn ghost" style="margin-top:8px">✏️ تعديل المبلغ (بسبب مكتوب)</button>
+    <p class="muted" style="margin-top:12px;font-size:14px">
+      الاعتماد بيسجّل في سجل المراجعة باسمك ووقته، ومينفعش يتعدّل بعدين — التصحيح بقيد عكسي.</p>
+  </div>
+  <div class="card">
+    <h3>ملخص سريع</h3>
+    <div class="row"><div class="ic">⏳</div><div class="body"><b>مستنية المراجعة</b></div>
+      <div class="end"><b><bdi>7</bdi></b></div></div>
+    <div class="row"><div class="ic">📅</div><div class="body"><b>إيرادات أغسطس</b></div>
+      <div class="end"><b><bdi>14,500</bdi></b></div></div>
+    <div class="row"><div class="ic">💸</div><div class="body"><b>مصروفات أغسطس</b></div>
+      <div class="end"><b><bdi>33,050</bdi></b></div></div>
+    <div class="row"><div class="ic">⚠️</div><div class="body"><b>وحدات متأخرة</b></div>
+      <div class="end"><b><bdi>38</bdi></b></div></div>
+  </div>
+ </div>
+</div>
+
+<!-- ---------- NEWS ---------- -->
+<div class="screen" id="s-news">
+ <div class="wrap">
+  <div class="card">
+    <div class="field" style="margin-bottom:0">
+      <input placeholder="🔍 دوّر في الأخبار والقرارات والمحاضر والمستندات…">
+    </div>
+  </div>
+  <div class="card">
+    <h3>مثبّت <span class="pill">مهم</span></h3>
+    <div class="row"><div class="ic">📌</div><div class="body">
+      <b>اجتماع الجمعية العمومية — الجمعة 21 أغسطس</b>
+      <span class="muted">جدول الأعمال: الميزانية، اشتراك 2027، انتخاب عضوين</span></div></div>
+  </div>
+  <div class="card">
+    <h3>أخبار وقرارات</h3>
+    <div class="row"><div class="ic">📰</div><div class="body">
+      <b>تشغيل مواتير المياه الجديدة</b><span class="muted">29 يوليو 2026</span></div></div>
+    <div class="row"><div class="ic">📋</div><div class="body">
+      <b>قرار رقم 14 — تعديل مواعيد دخول عربات المياه</b><span class="muted">21 يوليو 2026</span></div></div>
+    <div class="row"><div class="ic">📋</div><div class="body">
+      <b>قرار رقم 13 — التعاقد مع شركة نظافة جديدة</b><span class="muted">3 يوليو 2026</span></div></div>
+    <div class="row"><div class="ic">📄</div><div class="body">
+      <b>محضر اجتماع مجلس الإدارة — يونيو 2026</b><span class="muted">PDF · 4 صفحات</span></div></div>
+  </div>
+  <div class="card">
+    <h3>ألبومات الصيانة والتطوير</h3>
+    <div class="row"><div class="ic">📸</div><div class="body">
+      <b>ترميم السور الخارجي</b><span class="muted">14 يوليو 2026 · 18 صورة · مربوط بمصروف <bdi>42,000</bdi> ج.م</span></div></div>
+    <div class="row"><div class="ic">📸</div><div class="body">
+      <b>تجديد حمام السباحة</b><span class="muted">2 يونيو 2026 · 24 صورة</span></div></div>
+    <div class="row"><div class="ic">📸</div><div class="body">
+      <b>زراعة المساحات الخضراء</b><span class="muted">18 مايو 2026 · 11 صورة</span></div></div>
+  </div>
+  <div class="card">
+    <h3>مين أكلّم؟</h3>
+    <div class="row"><div class="ic">👤</div><div class="body"><b>م. خالد — رئيس المجلس</b>
+      <span class="muted"><bdi>010 1234 5678</bdi></span></div><div class="end">💬</div></div>
+    <div class="row"><div class="ic">🛡️</div><div class="body"><b>بوابة الأمن</b>
+      <span class="muted"><bdi>011 2345 6789</bdi></span></div><div class="end">📞</div></div>
+    <div class="row"><div class="ic">🔧</div><div class="body"><b>سباك القرية — عم رجب</b>
+      <span class="muted"><bdi>012 3456 7890</bdi></span></div><div class="end">📞</div></div>
+  </div>
+ </div>
+</div>
+
+<button class="help-fab" onclick="alert('هيفتح واتساب لمجلس الإدارة')">💬 محتاج مساعدة؟</button>
+
+<nav class="bottom">
+  <button class="on" onclick="go('s-home');setNav(0)"><span>🏠</span>الرئيسية</button>
+  <button onclick="go('s-payments');setNav(1)"><span>🧾</span>إيصالاتي</button>
+  <button onclick="go('s-finance');setNav(2)"><span>💰</span>فلوس القرية</button>
+  <button onclick="go('s-news');setNav(3)"><span>📢</span>أخبار</button>
+  <button onclick="go('s-admin');setNav(4)"><span>🛡️</span>الأدمن</button>
+</nav>
+</div><!-- /app -->
+
+<script>
+const DATA=[
+ {n:'مرتبات العمالة',v:168000,c:'#0E5C63'},
+ {n:'الصيانة (كهرباء وإنارة)',v:96400,c:'#1D7A4C'},
+ {n:'المياه',v:74200,c:'#1F5FA8'},
+ {n:'الأمن والحراسة',v:63000,c:'#C1873B'},
+ {n:'النظافة ورفع المخلفات',v:48000,c:'#7A4B8F'},
+ {n:'المساحات الخضراء',v:31500,c:'#2E7D32'},
+ {n:'الكهرباء (عداد عام)',v:24600,c:'#A96A00'},
+ {n:'مصروفات إدارية',v:17900,c:'#5B615C'}
+];
+const fmt=n=>n.toLocaleString('en-US',{minimumFractionDigits:0});
+const total=DATA.reduce((a,b)=>a+b.v,0);
+document.getElementById('bars').innerHTML=DATA.map(d=>{
+  const p=(d.v/total*100);
+  return `<div style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:600">
+      <span>${d.n}</span><span><bdi>${fmt(d.v)}</bdi> ج.م</span></div>
+    <div class="bar"><i style="width:${p}%;background:${d.c}"></i></div>
+    <div class="legend"><span></span><span><bdi>${p.toFixed(1)}%</bdi></span></div></div>`;
+}).join('');
+document.getElementById('tb').innerHTML=DATA.map(d=>
+  `<tr><td>${d.n}</td><td><bdi>${fmt(d.v)}</bdi></td><td><bdi>${(d.v/total*100).toFixed(1)}%</bdi></td></tr>`
+).join('')+`<tr style="font-weight:700"><td>الإجمالي</td><td><bdi>${fmt(total)}</bdi></td><td><bdi>100%</bdi></td></tr>`;
+
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  const inApp=!['s-login','s-otp','s-wait'].includes(id);
+  document.getElementById('app').style.display=inApp?'block':'none';
+  if(!inApp){document.getElementById(id).classList.add('on');}
+  window.scrollTo(0,0);
+}
+function setNav(i){
+  const b=document.querySelectorAll('nav.bottom button');
+  b.forEach(x=>x.classList.remove('on')); if(b[i])b[i].classList.add('on');
+}
+function setRole(el,r){
+  document.querySelectorAll('.roleswitch button').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  const w={'ساكن':'د. أحمد محمود · عمارة 5 شقة 12','أدمن':'م. خالد — رئيس مجلس الإدارة','مشغّل':'عم سمير — مشغّل'};
+  document.getElementById('whoami').textContent=w[r];
+  if(r==='أدمن'){go('s-admin');setNav(4);}
+}
+function toggleTable(){
+  const t=document.getElementById('numtable');
+  t.style.display=t.style.display==='none'?'block':'none';
+}
+function toggleTheme(){
+  const h=document.documentElement;
+  h.dataset.theme=h.dataset.theme==='dark'?'':'dark';
+}
+</script>
+</body>
+</html>

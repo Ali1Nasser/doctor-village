@@ -1,0 +1,73 @@
+# =============================================================================
+# The gate that has been open since CP-1: "npm run verify runs in CI and blocks
+# merge on failure."
+#
+# It has been open not because it is hard but because the repository has never
+# been pushed anywhere. This file is ready; it starts working the moment the
+# board's GitHub repo exists. Nothing here needs a secret, a card, or a paid
+# plan — GitHub Free gives 2,000 Actions minutes a month and this run takes
+# under two, on a private repo, with no overage possible (see
+# docs/QUOTA_AND_COST_REGISTER.md).
+#
+# ⚠️ `npm run verify` does NOT prove the schema works on real D1. `STRICT`
+# tables and `RAISE(ABORT)` inside triggers are verified only by
+# `tools/verify-d1.sh`, which needs a Cloudflare login and therefore cannot run
+# here. A green tick on this workflow is not that gate. See A-05 / R-031.
+# =============================================================================
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel a superseded run rather than burning minutes on a commit nobody will
+# merge. The free allowance is generous but it is an allowance.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # node:sqlite (DatabaseSync) is what every access test runs against.
+          # It is experimental and version-sensitive: pin the major, and do not
+          # move it without re-running the whole suite locally first.
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify
+        # lint (no SQL outside lib/db, RTL logical properties) + typecheck
+        # + unit + access/audit/auth/onboarding/transparency/views
+        # + ledger invariants + demo invariants + render every screen.
+        # One command, because a gate nobody can run in one command is a gate
+        # that quietly stops being run.
+        run: npm run verify
+
+      - name: Secrets must never reach the repository
+        # R-039. Cheap, and the one class of mistake that cannot be undone by a
+        # revert — a pushed credential is public the moment it lands.
+        run: |
+          set -e
+          if grep -rIn --exclude-dir=.git --exclude-dir=node_modules \
+               -E 'cfat_[A-Za-z0-9]{20,}|BEGIN [A-Z ]*PRIVATE KEY|"private_key"' . ; then
+            echo "::error::a credential-shaped string is in the tree"
+            exit 1
+          fi
+          echo "no credential-shaped strings found"
+
+      - name: Demo data must be unloadable into production
+        # C10 / R-036, asserted in CI as well as in the suite, because it is the
+        # one failure that would be discovered by residents rather than by us.
+        run: npm run verify:demo

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": ".build",
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "verbatimModuleSyntax": false,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "types/**/*.ts",
+    "lib/**/*.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}
