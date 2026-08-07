@@ -14,6 +14,7 @@ import { newId, mutate, NotFound, type Clock } from './index.js';
 import { require_, Forbidden, assertMakerChecker } from '../rbac.js';
 import type { ParseResult } from '../import/owners.js';
 import { createActivationChallenge } from './auth.js';
+import { foldArabicLetters, LETTER_FOLD_PAIRS } from '../search/fold.js';
 
 /* ===================================================================== */
 /* Assisted recovery — R-023 / R-003                                     */
@@ -299,8 +300,27 @@ export interface MemberRow {
  * capability an operator does not hold, and this list has no reason to carry
  * them. The link goes out through whatever channel the admin already uses.
  */
-export async function listMembers(ctx: AuthContext, db: Db): Promise<MemberRow[]> {
+export async function listMembers(
+  ctx: AuthContext, db: Db, query?: string,
+): Promise<MemberRow[]> {
   require_(ctx.role, 'user.create');
+
+  // Two hundred rows on a phone is not a list, it is a haystack. The filter is
+  // a plain LIKE rather than the FTS5 index that `lib/search/fold.ts` drives:
+  // that index covers published content, and profiles are deliberately not in
+  // it — a resident's name is not village news.
+  //
+  // Both sides are folded, so «احمد» finds «أحمد». That is not a nicety: the
+  // register was typed by several people over several years, and which alif
+  // somebody used is not a fact the searcher knows.
+  //
+  // `%` and `_` are escaped because the fold deliberately does NOT strip them
+  // — an unescaped `%` would turn any query into "list the whole village".
+  const q = (query ?? '').trim();
+  const like = q
+    ? `%${foldArabicLetters(q).replace(/[%_\\]/g, m => '\\' + m)}%`
+    : null;
+
   const r = await db.prepare(
     `SELECT p.id, p.full_name, p.role, p.is_active, p.last_login_at,
             (SELECT b.name_ar || ' — ' || u.unit_number
@@ -316,13 +336,29 @@ export async function listMembers(ctx: AuthContext, db: Db): Promise<MemberRow[]
                 AND ac.expires_at > ?)                            AS link_pending
        FROM profiles p
       WHERE p.is_active = 1
+        AND (? IS NULL OR ${FOLDED_NAME} LIKE ? ESCAPE '\\')
       ORDER BY (SELECT COUNT(*) FROM passkeys k2
                  WHERE k2.profile_id = p.id AND k2.revoked_at IS NULL) ASC,
                p.role, p.full_name
       LIMIT 400`
-  ).bind(new Date().toISOString()).all<MemberRow>();
+  ).bind(new Date().toISOString(), like, like).all<MemberRow>();
   return r.results ?? [];
 }
+
+/**
+ * `foldArabicLetters` rendered as SQL, generated from the same list so the two
+ * cannot drift. SQLite has no collation for this and D1 cannot register one, so
+ * a nest of REPLACEs is the whole toolbox.
+ *
+ * A resident entered in the register as «أحمد» is searched for as «احمد» by
+ * half the board and «أحمد» by the other half. Folding one side only is worse
+ * than folding neither: it fails silently, and a board member concludes the
+ * person is not in the system.
+ */
+const FOLDED_NAME = LETTER_FOLD_PAIRS.reduce(
+  (expr, [from, to]) => `REPLACE(${expr}, '${from}', '${to}')`,
+  'p.full_name',
+);
 
 /**
  * Issue a FIRST activation link. Returns the raw token exactly once — it is

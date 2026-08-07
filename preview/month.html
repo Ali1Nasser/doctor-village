@@ -75,6 +75,19 @@ h2{font-size:1.2rem;margin:28px 0 12px}
   border-radius:50%;background:var(--tsoft,var(--brand-soft));color:var(--tc,var(--brand));font-size:.8rem}
 .tile .v{font-size:1.6rem;font-weight:700;margin-block-start:6px;color:var(--tc,var(--ink))}
 .tile .note{font-size:.85rem;color:var(--ink-muted)}
+/* Board tools. Borrowing .tile made them render as underlined links with a
+   money-sized empty value slot — these are destinations, not figures, so they
+   get their own primitive: full tap target, no underline, chevron pointing the
+   reading direction (inline-end, so it flips with the language). */
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:560px){.tools{grid-template-columns:1fr}}
+.tool{display:flex;align-items:center;gap:12px;min-block-size:var(--tap);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 14px;color:var(--ink);text-decoration:none;font-weight:600;font-size:1.05rem}
+.tool .ico{inline-size:38px;block-size:38px;flex:0 0 38px;display:grid;place-items:center;
+  border-radius:12px;background:var(--brand-soft);font-size:1.15rem}
+.tool .go{margin-inline-start:auto;color:var(--ink-muted);font-size:1.2rem}
+.tool:hover,.tool:focus-visible{background:var(--brand-soft);border-color:var(--brand)}
 .btn{display:flex;align-items:center;justify-content:center;inline-size:100%;min-block-size:var(--tap);
   background:var(--brand);color:var(--brand-ink);border:0;border-radius:var(--radius);
   font-size:1.1rem;font-weight:700;margin-block-start:10px;font-family:inherit;cursor:pointer;

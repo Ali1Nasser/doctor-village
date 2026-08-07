@@ -116,6 +116,11 @@ const SCREENS: [string, string, string][] = [
   ['album',    '/albums/DEMOALB0000000000000000001', 'tok-res'],
   ['tickets',  '/maintenance',     'tok-res'],
   ['publish',  '/admin/content',   'tok-admin'],
+  ['members',  '/admin/members',   'tok-admin'],
+  // The board's own home. `home` above is the resident's; an admin sees the
+  // same page plus the board-tools card, and that card is the only route into
+  // every /admin/* screen — so it gets rendered and looked at, not assumed.
+  ['home-admin', '/',              'tok-admin'],
   ['statement',`/units/${residentUnit}/statement`, 'tok-res'],
   ['notfound','/nope',          'tok-res'],
 ];

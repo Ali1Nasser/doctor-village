@@ -1327,10 +1327,12 @@ export function createApp(deps: AppDeps) {
    */
   const membersScreen = async (
     ctx: AuthContext,
+    q: string,
     issued?: { name: string; url: string; expiresAt: string },
     error?: string,
   ) => cv.membersPage({
-    members: await onboard.listMembers(ctx, deps.db),
+    members: await onboard.listMembers(ctx, deps.db, q),
+    q,
     issued,
     error,
   });
@@ -1338,7 +1340,7 @@ export function createApp(deps: AppDeps) {
   app.get('/admin/members', async c => {
     const ctx = need(c);
     if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
-    return html(await membersScreen(ctx));
+    return html(await membersScreen(ctx, c.req.query('q') ?? ''));
   });
 
   app.post('/admin/members/:id/activate', async c => {
@@ -1351,13 +1353,13 @@ export function createApp(deps: AppDeps) {
       );
       // `t`, not `token` — /login/activate reads `c.req.query('t')`, and a link
       // built with the wrong parameter name looks valid and silently expires.
-      return html(await membersScreen(ctx, {
+      return html(await membersScreen(ctx, '', {
         name: fullName,
         url: `${deps.rp.origin}/login/activate?t=${token}`,
         expiresAt,
       }));
     } catch (e) {
-      if (e instanceof Forbidden) return html(await membersScreen(ctx, undefined, e.reasonAr), 403);
+      if (e instanceof Forbidden) return html(await membersScreen(ctx, '', undefined, e.reasonAr), 403);
       throw e;
     }
   });

@@ -164,10 +164,11 @@ ${(d.adminLinks ?? []).length > 0 ? `
 <h2>${esc(t.home.boardTools)}</h2>
 <div class="card">
   <p class="muted" style="margin-block-start:0">${esc(t.home.boardToolsHint)}</p>
-  <div class="tiles">
+  <div class="tools">
     ${(d.adminLinks ?? []).map(l => `
-    <a class="tile" href="${esc(l.href)}" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
-      <div class="lbl"><span class="ico" aria-hidden="true">${esc(l.icon)}</span>${esc(l.label)}</div>
+    <a class="tool" href="${esc(l.href)}">
+      <span class="ico" aria-hidden="true">${esc(l.icon)}</span>${esc(l.label)}
+      <span class="go" aria-hidden="true">←</span>
     </a>`).join('')}
   </div>
 </div>` : ''}`);

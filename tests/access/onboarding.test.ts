@@ -314,6 +314,47 @@ describe('first activation is not a back door into recovery', () => {
     assert.ok(!row.token_hash.includes('tok-'), 'the raw token was stored');
   });
 
+  it('a name filter narrows the list', async () => {
+    const rows = await onboard.listMembers(admin1, db, 'منى');
+    assert.ok(rows.length >= 1 && rows.length < 10, `filter returned ${rows.length} rows`);
+    assert.ok(rows.every(r => r.full_name.includes('من')), 'the filter matched somebody else');
+  });
+
+  it('⭐ searching without the hamza still finds the hamza — the whole point', async () => {
+    const bare = await onboard.listMembers(admin1, db, 'حسن المستقر');
+    assert.ok(bare.some(r => r.id === SETTLED));
+    // the register writes أ, half the board types ا
+    const x = (q: string, ...p: unknown[]) => raw.prepare(q).run(...p as never[]);
+    x(`INSERT INTO profiles (id,full_name,role) VALUES (?,?,?)`,
+      id('PRF', 22), 'د. أحمد إبراهيم', 'resident');
+    const folded = await onboard.listMembers(admin1, db, 'احمد ابراهيم');
+    assert.ok(folded.some(r => r.full_name === 'د. أحمد إبراهيم'),
+      'a name written with hamza is unfindable when typed without it');
+  });
+
+  it('a LIKE wildcard typed into the box is a character, not a wildcard', async () => {
+    assert.equal((await onboard.listMembers(admin1, db, '%')).length, 0,
+      'typing % listed the entire village');
+    // the sharper version: % between two letters must not span the gap
+    assert.equal((await onboard.listMembers(admin1, db, 'د%ن')).length, 0,
+      '% matched across characters — it reached SQL as a wildcard');
+  });
+
+  it('⭐ the punctuation the register itself uses still matches', async () => {
+    // The FTS fold turns every non-letter into a space, which is right for an
+    // index of tokens and wrong here: «د. حسن» is how the name is written, and
+    // typing it exactly must not return nothing.
+    const rows = await onboard.listMembers(admin1, db, 'د. حسن');
+    assert.ok(rows.some(r => r.id === SETTLED),
+      'searching a name exactly as it is spelled found nobody');
+  });
+
+  it('an empty filter is not a filter', async () => {
+    const all = await onboard.listMembers(admin1, db);
+    const blank = await onboard.listMembers(admin1, db, '   ');
+    assert.equal(blank.length, all.length);
+  });
+
   it('the screen is refused to an operator over HTTP too', async () => {
     const r = await app.fetch(new Request('http://localhost/admin/members',
       { headers: { authorization: 'Bearer tok-op' } }));

@@ -49,6 +49,36 @@ const ARABIC_INDIC_DIGITS = /[٠-٩۰-۹]/g;
  * a resident typing «مسئول» and one typing «مسؤول» must find each other, and
  * both must find «مسءول» — folding to the carrier is what makes all three meet.
  */
+/**
+ * The same rules as `LETTER_FOLDINGS` below, one character at a time.
+ *
+ * A second form exists because a `LIKE` filter has to fold BOTH sides and only
+ * one of them is in TypeScript: the stored name is folded by a `REPLACE` chain
+ * inside the query (`lib/db/onboarding.ts`), which can express single-character
+ * substitutions and nothing else. Deriving that chain from this list is what
+ * stops the two halves from drifting apart — a fold applied to the query but
+ * not to the column silently returns nothing, which reads as "that resident
+ * does not exist".
+ */
+export const LETTER_FOLD_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ['آ', 'ا'], ['أ', 'ا'], ['إ', 'ا'], ['ٱ', 'ا'], ['ٲ', 'ا'], ['ٳ', 'ا'], ['ٵ', 'ا'],
+  ['ة', 'ه'], ['ى', 'ي'], ['ؤ', 'و'], ['ئ', 'ي'], ['ء', ''],
+];
+
+/**
+ * Fold ONLY the letter shapes, leaving punctuation, spacing and case alone.
+ *
+ * `foldArabic` turns every non-letter into a space, which is right for an FTS5
+ * index built of tokens and wrong for a `LIKE` over a whole name: it would make
+ * «د. سامح» — typed exactly as the register spells it — match nothing, because
+ * the query lost the full stop the column still has.
+ */
+export function foldArabicLetters(input: string): string {
+  let s = String(input ?? '').normalize('NFKC');
+  for (const [from, to] of LETTER_FOLD_PAIRS) s = s.split(from).join(to);
+  return s;
+}
+
 const LETTER_FOLDINGS: ReadonlyArray<readonly [RegExp, string]> = [
   [/[آأإٱٲٳٵ]/g, 'ا'], // آ أ إ ٱ ٲ ٳ ٵ → ا
   [/ة/g, 'ه'],                                        // ة → ه

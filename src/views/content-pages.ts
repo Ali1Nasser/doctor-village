@@ -625,9 +625,19 @@ export function membersPage(d: {
   }>;
   issued?: { name: string; url: string; expiresAt: string };
   error?: string;
+  /** The name filter currently applied, echoed back into the box. */
+  q?: string;
 }): string {
   const waiting = d.members.filter(m => m.passkeys === 0);
   const active = d.members.filter(m => m.passkeys > 0);
+
+  // `profiles.role` is an English slug because it is a database column and a
+  // capability key; it is not a label. Printing it raw put "finance_reviewer"
+  // in front of a resident on an all-Arabic screen. Unknown values fall back to
+  // the slug rather than to an empty cell — a role nobody named is still worth
+  // seeing, and it will be obvious it needs a translation.
+  const roleAr = (r: string) =>
+    (t.members.roles as Record<string, string>)[r] ?? r;
 
   const row = (m: typeof d.members[number]) => `
   <div class="row">
@@ -635,7 +645,7 @@ export function membersPage(d: {
     <span class="row-body">
       <b>${esc(m.full_name)}</b>
       <span class="muted">
-        ${esc(m.unit_label ?? t.members.noUnit)} · ${esc(m.role)}
+        ${esc(m.unit_label ?? t.members.noUnit)} · ${esc(roleAr(m.role))}
         ${m.last_login_at
           ? ` · ${esc(t.members.lastLogin)} ${arDate(m.last_login_at)}`
           : ` · ${esc(t.members.never)}`}
@@ -658,6 +668,19 @@ export function membersPage(d: {
   <h2 style="margin-block-start:0">${esc(t.members.title)}</h2>
   <p class="muted">${esc(t.members.subtitle)}</p>
   ${d.error ? `<div class="banner warn">${esc(d.error)}</div>` : ''}
+
+  <!-- GET, so a filtered list is a URL the board can bookmark or send to each
+       other, and the back button behaves. No script: typing a name and pressing
+       enter is the whole interaction. -->
+  <form method="get" action="/admin/members" role="search">
+    <div class="field">
+      <label for="mq">${esc(t.members.find)}</label>
+      <input id="mq" name="q" type="search" autocomplete="off"
+             value="${esc(d.q ?? '')}" placeholder="${esc(t.members.find)}">
+    </div>
+    <button class="btn btn-2" type="submit">🔍 ${esc(t.members.findGo)}</button>
+    ${d.q ? `<a class="btn btn-2" href="/admin/members">${esc(t.members.findClear)}</a>` : ''}
+  </form>
 </div>
 
 ${d.issued ? `
@@ -675,7 +698,9 @@ ${d.issued ? `
   <h3 style="margin-block-start:0">⏳ ${esc(t.members.waiting)} — ${
     esc(msg(t.members.countWaiting, { n: waiting.length }))}</h3>
   ${waiting.length === 0
-    ? emptyWithHint('🎉', 'كل الأعضاء دخلوا البوابة', 'مفيش حد مستني تفعيل.')
+    ? d.q
+      ? emptyWithHint('🔍', t.members.findNone, t.members.findNoneHint)
+      : emptyWithHint('🎉', 'كل الأعضاء دخلوا البوابة', 'مفيش حد مستني تفعيل.')
     : waiting.map(row).join('')}
 </div>
 
