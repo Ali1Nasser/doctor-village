@@ -74,7 +74,7 @@ export async function resolveAuthContext(
     `SELECT s.id, s.profile_id, s.reauth_at, p.role, p.is_active
        FROM sessions s JOIN profiles p ON p.id = s.profile_id
       WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`
-  ).bind(hashToken(sessionToken), now()).first<{
+  ).bind(await hashToken(sessionToken), now()).first<{
     id: string; profile_id: string; reauth_at: string | null; role: Role; is_active: number;
   }>();
   if (!s || !s.is_active) return null;
@@ -109,9 +109,21 @@ export async function resolveAuthContext(
 
 /** Placeholder for the real hash. Swapped for SHA-256 in lib/auth/session.ts;
  *  kept here so `lib/db/` never imports crypto policy. */
-let _hash: (t: string) => string = t => t;
-export function setTokenHasher(fn: (t: string) => string) { _hash = fn; }
-function hashToken(t: string) { return _hash(t); }
+let _hash: (t: string) => string | Promise<string> = (t: string) => t;
+/**
+ * The session-token hasher is injected because the same hash has to be
+ * computable in three environments and only one of them has `node:crypto`:
+ * the Node tests use `createHash`, and a Cloudflare Worker has only WebCrypto —
+ * whose `subtle.digest` is asynchronous.
+ *
+ * So the hasher may return a promise. There is exactly ONE call site
+ * (`resolveAuthContext`, below) and it is already async, which is what makes
+ * this safe rather than invasive. The alternative was a hand-written
+ * synchronous SHA-256 shipped solely to keep a signature — new cryptographic
+ * code to avoid one `await`.
+ */
+export function setTokenHasher(fn: (t: string) => string | Promise<string>) { _hash = fn; }
+function hashToken(t: string): string | Promise<string> { return _hash(t); }
 
 export interface AuditFacts {
   action: string;
@@ -1213,4 +1225,56 @@ export async function latestNotificationFor(db: Db, profileId: Id) {
       WHERE profile_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`
   ).bind(profileId).all();
   return r.results;
+}
+
+/* ===================================================================== */
+/* System jobs — no AuthContext, and why that is safe here               */
+/* ===================================================================== */
+
+/**
+ * The nightly quota snapshot, written by the Worker's cron trigger.
+ *
+ * ## Why this takes no `AuthContext`
+ *
+ * Every other function in `lib/db/` takes one, and C6 says a data-access call
+ * without an identity must be a compile error. This is the documented exception,
+ * on the same reasoning as `lib/db/blobs.ts`: a cron has no caller to identify.
+ * There is no session, no person, and inventing a synthetic "system" identity
+ * would be worse — it would put a principal in the audit log that nobody can be
+ * held to.
+ *
+ * What makes the exception safe is the shape of what it touches:
+ * `quota_snapshots` holds counters about the deployment itself. It contains no
+ * resident data, no money, and no name; there is no ownership predicate that
+ * could be omitted because there is nothing owned. It is append-only and it is
+ * read by `/admin/health`, which is capability-gated on its own.
+ *
+ * It lives here rather than in `src/worker.ts` because `tools/lint-no-sql.mjs`
+ * is absolute, and correctly refused it there — the moment there is one
+ * documented exception to "no SQL outside lib/db/", the next one is easier.
+ */
+export async function recordQuotaSnapshot(
+  db: Db, now: Clock,
+): Promise<{ used: number; limit: number; pct: number }> {
+  const ts = now();
+  const usage = await db.prepare(
+    `SELECT COALESCE(SUM(size_bytes), 0) AS used FROM storage_objects WHERE deleted_at IS NULL`
+  ).first<{ used: number }>();
+  const cap = await db.prepare(
+    `SELECT storage_hard_cap_bytes AS cap FROM settings WHERE id = 1`
+  ).first<{ cap: number }>();
+
+  const used = usage?.used ?? 0;
+  // 7 GiB — the ceiling this project enforces in its own code rather than
+  // trusting a vendor's free-tier limit (05 §2a).
+  const limit = cap?.cap ?? 7_516_192_768;
+  const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
+
+  await db.prepare(
+    `INSERT INTO quota_snapshots (id, service, metric, used, limit_value, pct_used,
+       reset_period, captured_at)
+     VALUES (?, 'storage', 'bytes', ?, ?, ?, 'none', ?)`
+  ).bind(newId('QSN'), used, limit, pct, ts).run();
+
+  return { used, limit, pct };
 }
