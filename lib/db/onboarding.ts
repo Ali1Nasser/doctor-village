@@ -13,6 +13,7 @@ import { LedgerRefused } from './driver.js';
 import { newId, mutate, NotFound, type Clock } from './index.js';
 import { require_, Forbidden, assertMakerChecker } from '../rbac.js';
 import type { ParseResult } from '../import/owners.js';
+import { createActivationChallenge } from './auth.js';
 
 /* ===================================================================== */
 /* Assisted recovery — R-023 / R-003                                     */
@@ -255,4 +256,116 @@ export async function getImportPreview(ctx: AuthContext, db: Db, batchId: Id) {
   }>();
   if (!b) throw new NotFound();
   return { ...b, rows: JSON.parse(b.preview_json) as unknown[] };
+}
+
+/* ===================================================================== */
+/* Members & first activation — the screen the board actually needs      */
+/* ===================================================================== */
+
+export interface MemberRow {
+  id: Id;
+  full_name: string;
+  role: string;
+  is_active: number;
+  unit_label: string | null;
+  passkeys: number;
+  last_login_at: string | null;
+  /** A live, unconsumed activation link is already outstanding for this person. */
+  link_pending: number;
+}
+
+/**
+ * Everyone the board can activate, with the ONE fact that decides what to do
+ * next: has this person got a passkey yet?
+ *
+ * ## Why this exists
+ *
+ * Until now the only way to issue an activation link was the RECOVERY path —
+ * two admins, a written identity check, and a JSON API with no screen. That is
+ * the right amount of friction for "someone lost their phone and wants back
+ * into an account that already has money in it". It is entirely the wrong
+ * amount for "we are onboarding 204 people who have never logged in", and
+ * because it was the only path, onboarding a village was in practice
+ * impossible from the product itself.
+ *
+ * First activation and recovery are different acts and now have different
+ * doors. A first activation reaches an account with no passkey, no session
+ * history and nothing to steal; recovery reaches one that may hold a year of
+ * payments. `issueFirstActivation` refuses the second case outright — the
+ * moment somebody has a passkey, they go through recovery, with its second
+ * admin and its identity check.
+ *
+ * Phone numbers are deliberately NOT selected: `phone.read_any` is a separate
+ * capability an operator does not hold, and this list has no reason to carry
+ * them. The link goes out through whatever channel the admin already uses.
+ */
+export async function listMembers(ctx: AuthContext, db: Db): Promise<MemberRow[]> {
+  require_(ctx.role, 'user.create');
+  const r = await db.prepare(
+    `SELECT p.id, p.full_name, p.role, p.is_active, p.last_login_at,
+            (SELECT b.name_ar || ' — ' || u.unit_number
+               FROM unit_owners uo
+               JOIN units u ON u.id = uo.unit_id
+               JOIN buildings b ON b.id = u.building_id
+              WHERE uo.profile_id = p.id AND uo.valid_to IS NULL
+              LIMIT 1)                                            AS unit_label,
+            (SELECT COUNT(*) FROM passkeys k
+              WHERE k.profile_id = p.id AND k.revoked_at IS NULL)  AS passkeys,
+            (SELECT COUNT(*) FROM activation_challenges ac
+              WHERE ac.profile_id = p.id AND ac.consumed_at IS NULL
+                AND ac.expires_at > ?)                            AS link_pending
+       FROM profiles p
+      WHERE p.is_active = 1
+      ORDER BY (SELECT COUNT(*) FROM passkeys k2
+                 WHERE k2.profile_id = p.id AND k2.revoked_at IS NULL) ASC,
+               p.role, p.full_name
+      LIMIT 400`
+  ).bind(new Date().toISOString()).all<MemberRow>();
+  return r.results ?? [];
+}
+
+/**
+ * Issue a FIRST activation link. Returns the raw token exactly once — it is
+ * never stored, only its hash is, so a second read is impossible by design.
+ *
+ * Refuses anyone who already holds a passkey. That is the whole security
+ * boundary of this function: without it, an admin could mint a fresh
+ * credential onto an existing account and become that resident, and the
+ * recovery flow's second signature would be decoration.
+ */
+export async function issueFirstActivation(
+  ctx: AuthContext, db: Db, profileId: Id, sha256: (s: string) => Promise<string>,
+  randomToken: () => string, now: Clock,
+): Promise<{ token: string; fullName: string; expiresAt: string }> {
+  require_(ctx.role, 'user.create');
+
+  const p = await db.prepare(
+    `SELECT p.full_name,
+            (SELECT COUNT(*) FROM passkeys k
+              WHERE k.profile_id = p.id AND k.revoked_at IS NULL) AS passkeys
+       FROM profiles p WHERE p.id = ? AND p.is_active = 1`
+  ).bind(profileId).first<{ full_name: string; passkeys: number }>();
+  if (!p) throw new NotFound('العضو ده مش موجود');
+
+  if (p.passkeys > 0) {
+    throw new Forbidden('user.create',
+      'الشخص ده عنده بصمة مسجّلة خلاص. لو ضاع منه الموبايل استخدم مسار الاسترجاع — '
+      + 'محتاج موافقة أدمن تاني وتأكيد شخصية.');
+  }
+
+  const token = randomToken();
+  await createActivationChallenge(ctx, db, profileId, await sha256(token),
+    'first_activation', now);
+
+  const expiresAt = await db.prepare(
+    `SELECT expires_at FROM activation_challenges
+      WHERE profile_id = ? AND consumed_at IS NULL
+      ORDER BY created_at DESC LIMIT 1`
+  ).bind(profileId).first<{ expires_at: string }>();
+
+  return {
+    token,
+    fullName: p.full_name,
+    expiresAt: expiresAt?.expires_at ?? '',
+  };
 }

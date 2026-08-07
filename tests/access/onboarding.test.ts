@@ -250,3 +250,106 @@ describe('owner-register import — the CP-2 gate, R-009', () => {
     assert.deepEqual(actions, ['import.stage', 'import.commit']);
   });
 });
+
+/* ================================================================== */
+/**
+ * First activation — the screen that makes onboarding possible at all.
+ *
+ * The point of these tests is the SEAM between this path and the recovery path
+ * above. Recovery is deliberately heavy: two admins, a written identity check,
+ * an audit trail. First activation is deliberately light, because it reaches an
+ * account with no passkey, no history and nothing to steal. The whole thing
+ * only holds if the light path physically cannot reach an account the heavy one
+ * guards — so that is what is asserted, at the data layer and over HTTP.
+ */
+describe('first activation is not a back door into recovery', () => {
+  const NEW = id('PRF', 20), SETTLED = id('PRF', 21);
+
+  before(() => {
+    const x = (s: string, ...p: unknown[]) => raw.prepare(s).run(...p as never[]);
+    x(`INSERT INTO profiles (id,full_name,role) VALUES (?,?,?)`, NEW, 'د. منى الجديدة', 'resident');
+    x(`INSERT INTO profiles (id,full_name,role) VALUES (?,?,?)`, SETTLED, 'د. حسن المستقر', 'resident');
+    x(`INSERT INTO passkeys (id,profile_id,credential_id,public_key,sign_count,rp_id,device_label_ar)
+       VALUES (?,?,?,?,?,?,?)`,
+      id('PSK', 20), SETTLED, 'cred-settled', new Uint8Array([9]), 1, RP.id, 'موبايله');
+  });
+
+  it('an operator cannot list the members at all', async () => {
+    await assert.rejects(() => onboard.listMembers(operator, db));
+  });
+
+  it('the people who never logged in come FIRST', async () => {
+    const rows = await onboard.listMembers(admin1, db);
+    const firstWithKey = rows.findIndex(r => r.passkeys > 0);
+    const lastWithout = rows.map(r => r.passkeys).lastIndexOf(0);
+    assert.ok(firstWithKey === -1 || lastWithout < firstWithKey,
+      'somebody who already logged in is listed above somebody still waiting');
+    assert.ok(rows.some(r => r.id === NEW), 'the new member is missing from the list');
+  });
+
+  it('phone numbers are not in the list — `phone.read_any` is a separate capability', async () => {
+    const rows = await onboard.listMembers(admin1, db);
+    assert.ok(!rows.some(r => JSON.stringify(r).includes('+2')),
+      'a phone number leaked through the members list');
+  });
+
+  it('⭐ it REFUSES anyone who already has a passkey — that is recovery', async () => {
+    await assert.rejects(
+      () => onboard.issueFirstActivation(
+        admin1, db, SETTLED as never, async t => sha(t), () => 'never-minted', NOW),
+      /الاسترجاع/, 'an admin minted a credential onto a live account, alone');
+    const live = raw.prepare(
+      `SELECT COUNT(*) n FROM activation_challenges WHERE profile_id=?`).get(SETTLED) as { n: number };
+    assert.equal(live.n, 0, 'a refused activation still created a challenge');
+  });
+
+  it('a first activation for someone with no passkey works, and stores only the hash', async () => {
+    const out = await onboard.issueFirstActivation(
+      admin1, db, NEW as never, async t => sha(t), () => 'tok-first-activation', NOW);
+    assert.equal(out.token, 'tok-first-activation');
+    assert.equal(out.fullName, 'د. منى الجديدة');
+    const row = raw.prepare(
+      `SELECT token_hash FROM activation_challenges WHERE profile_id=?`).get(NEW) as { token_hash: string };
+    assert.equal(row.token_hash, sha('tok-first-activation'));
+    assert.ok(!row.token_hash.includes('tok-'), 'the raw token was stored');
+  });
+
+  it('the screen is refused to an operator over HTTP too', async () => {
+    const r = await app.fetch(new Request('http://localhost/admin/members',
+      { headers: { authorization: 'Bearer tok-op' } }));
+    assert.equal(r.status, 403);
+  });
+
+  it('an admin gets the screen with everybody on it', async () => {
+    const r = await app.fetch(new Request('http://localhost/admin/members',
+      { headers: { authorization: 'Bearer tok-a1' } }));
+    assert.equal(r.status, 200);
+    const body = await r.text();
+    assert.ok(body.includes('د. منى الجديدة'), 'the waiting member is not on the screen');
+    assert.ok(body.includes('/admin/members/' + NEW + '/activate'),
+      'there is no way to issue a link from the screen');
+  });
+
+  it('⭐ the issued link uses ?t= — the parameter /login/activate actually reads', async () => {
+    const r = await app.fetch(new Request(
+      `http://localhost/admin/members/${NEW}/activate`,
+      { method: 'POST', headers: { authorization: 'Bearer tok-a1' } }));
+    assert.equal(r.status, 200);
+    const body = await r.text();
+    const m = /\/login\/activate\?t=([A-Za-z0-9_-]+)/.exec(body);
+    assert.ok(m, 'the screen did not render a usable activation link');
+
+    // and the link it printed genuinely opens the activation page
+    const open = await app.fetch(new Request(`http://localhost/login/activate?t=${m[1]}`));
+    assert.equal(open.status, 200, 'the link the board would send does not work');
+  });
+
+  it('the refusal is shown on the screen, not thrown as a 500', async () => {
+    const r = await app.fetch(new Request(
+      `http://localhost/admin/members/${SETTLED}/activate`,
+      { method: 'POST', headers: { authorization: 'Bearer tok-a1' } }));
+    assert.equal(r.status, 403);
+    assert.ok((await r.text()).includes('الاسترجاع'),
+      'the admin was not told to use the recovery path instead');
+  });
+});

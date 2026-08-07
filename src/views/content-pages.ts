@@ -601,3 +601,88 @@ export function pickUnitPage(d: { units: Array<{ id: string; label: string }> })
   </a>`).join('')}
 </div>`);
 }
+
+/* ===================================================================== */
+/* Admin: members & first activation                                     */
+/* ===================================================================== */
+
+/**
+ * The screen that makes onboarding a village possible from the product.
+ *
+ * People who have never logged in are listed FIRST — that ordering is the
+ * whole job of this page. A board secretary working through 204 residents
+ * needs "who is still outside?" at the top, not an alphabetical list they have
+ * to scan for the ones without a tick.
+ *
+ * A freshly issued link is shown once, in full, with a warning that says so.
+ * Only its hash is stored, so "show it to me again" is not a feature that was
+ * left out — it is a thing the system genuinely cannot do.
+ */
+export function membersPage(d: {
+  members: Array<{
+    id: string; full_name: string; role: string; unit_label: string | null;
+    passkeys: number; last_login_at: string | null; link_pending: number;
+  }>;
+  issued?: { name: string; url: string; expiresAt: string };
+  error?: string;
+}): string {
+  const waiting = d.members.filter(m => m.passkeys === 0);
+  const active = d.members.filter(m => m.passkeys > 0);
+
+  const row = (m: typeof d.members[number]) => `
+  <div class="row">
+    <span class="ico" aria-hidden="true">${m.passkeys > 0 ? '✅' : m.link_pending > 0 ? '📨' : '👤'}</span>
+    <span class="row-body">
+      <b>${esc(m.full_name)}</b>
+      <span class="muted">
+        ${esc(m.unit_label ?? t.members.noUnit)} · ${esc(m.role)}
+        ${m.last_login_at
+          ? ` · ${esc(t.members.lastLogin)} ${arDate(m.last_login_at)}`
+          : ` · ${esc(t.members.never)}`}
+      </span>
+      ${m.passkeys === 0 && m.link_pending > 0
+        ? `<span class="chip chip-info">📨 ${esc(t.members.linkPending)}</span>` : ''}
+    </span>
+    <span class="row-end">
+      ${m.passkeys > 0
+        ? `<span class="chip chip-ok">✔ ${esc(t.members.hasPasskey)}</span>`
+        : `<form method="post" action="/admin/members/${esc(m.id)}/activate" class="inline-form">
+             <button class="btn btn-2 btn-sm" type="submit">🔗 ${
+               esc(m.link_pending > 0 ? t.members.reissue : t.members.issue)}</button>
+           </form>`}
+    </span>
+  </div>`;
+
+  return page({ title: t.members.title, active: 'home' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">${esc(t.members.title)}</h2>
+  <p class="muted">${esc(t.members.subtitle)}</p>
+  ${d.error ? `<div class="banner warn">${esc(d.error)}</div>` : ''}
+</div>
+
+${d.issued ? `
+<div class="card" style="border-inline-start:5px solid var(--ok)">
+  <h3 style="margin-block-start:0">🔗 ${esc(msg(t.members.linkReady, { name: d.issued.name }))}</h3>
+  <div class="banner warn">${esc(t.members.linkOnce)}</div>
+  <p style="word-break:break-all;background:var(--surface-2);padding:12px;border-radius:10px;
+            font-size:.9rem;direction:ltr;text-align:start">${esc(d.issued.url)}</p>
+  <p class="muted">${esc(msg(t.members.linkExpires, { when: '' }))} ${
+    d.issued.expiresAt ? arDate(d.issued.expiresAt) : ''}</p>
+  <p class="hint">${esc(t.members.copyHint)}</p>
+</div>` : ''}
+
+<div class="card">
+  <h3 style="margin-block-start:0">⏳ ${esc(t.members.waiting)} — ${
+    esc(msg(t.members.countWaiting, { n: waiting.length }))}</h3>
+  ${waiting.length === 0
+    ? emptyWithHint('🎉', 'كل الأعضاء دخلوا البوابة', 'مفيش حد مستني تفعيل.')
+    : waiting.map(row).join('')}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">✅ ${esc(t.members.active)} (${num(active.length)})</h3>
+  ${active.length === 0
+    ? emptyWithHint('👥', 'لسه محدش فعّل حسابه', 'ابعت لينك تفعيل لأي حد من فوق.')
+    : active.map(row).join('')}
+</div>`);
+}

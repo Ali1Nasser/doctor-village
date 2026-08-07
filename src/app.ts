@@ -256,6 +256,33 @@ export function createApp(deps: AppDeps) {
       headers: { 'content-type': 'text/html; charset=utf-8', ...headers },
     });
 
+  /**
+   * The board's own navigation, computed per caller.
+   *
+   * Every `/admin/*` screen was reachable only by typing its URL: the five nav
+   * tabs are the resident's, and an admin landed on the same home page as
+   * everybody else. So the admin half of the portal existed and could not be
+   * found — including, until now, the only way to onboard the village.
+   *
+   * Each entry is gated on the capability its route enforces, so a
+   * `finance_reviewer` sees oversight and no approve buttons, and an operator
+   * sees content but never the receipt queue. The routes check again; this is
+   * only what gets drawn.
+   */
+  const boardLinks = (ctx: AuthContext) => {
+    const out: { href: string; icon: string; label: string }[] = [];
+    const add = (cap: Parameters<typeof can>[1], href: string, icon: string, label: string) => {
+      if (can(ctx.role, cap)) out.push({ href, icon, label });
+    };
+    add('user.create', '/admin/members', '👥', _t.members.title);
+    add('payment.review', '/admin/review', '🧾', _t.admin.queueTitle);
+    add('payment.read_any', '/admin/payments', '✅', _t.admin.approvedTitle);
+    add('expense.record', '/admin/expenses', '💸', _t.expenses.title);
+    add('post.publish', '/admin/content', '✍️', _t.content.manage);
+    add('system.read_quota', '/admin/health', '📊', _t.health.title);
+    return out;
+  };
+
   app.get('/login', () => html(v.loginPage()));
 
   /* ---- passkey ceremonies -------------------------------------------- */
@@ -385,6 +412,7 @@ export function createApp(deps: AppDeps) {
       pinned: pinned ? { title: pinned.title_ar, body: pinned.body_ar } : null,
       unread: await data.unreadCount(ctx, deps.db),
       demo: deps.demo,
+      adminLinks: boardLinks(ctx),
     }));
   });
 
@@ -1273,6 +1301,65 @@ export function createApp(deps: AppDeps) {
       ctx, deps.db, c.req.param('id') as never, String(f['pinned']) === '1', deps.now,
     );
     return c.redirect('/admin/content', 303);
+  });
+
+  /* ---- members & first activation --------------------------------------- */
+
+  /**
+   * The door the board walks through to onboard the village.
+   *
+   * Before this screen the only way to hand somebody an activation link was
+   * `/api/admin/recoveries/*` — three JSON calls, two admins and an identity
+   * check, with no user interface at all. That is the correct weight for "my
+   * phone was stolen and my account has a year of payments in it"; it is the
+   * wrong weight, by a wide margin, for the first day, when 204 people have
+   * never logged in and hold nothing worth stealing. Because it was the only
+   * path, onboarding was in practice impossible from the product itself.
+   *
+   * The two acts are now separate doors, and `issueFirstActivation` keeps them
+   * separate at the data layer: the moment a person owns a passkey it refuses,
+   * and says to use recovery. So an admin who wants to mint a credential onto
+   * a resident's live account still needs the second signature — this screen
+   * cannot be used to skip it.
+   *
+   * The link is rendered exactly once. Only its SHA-256 is stored, so there is
+   * no second read to offer, and re-issuing simply mints a new challenge.
+   */
+  const membersScreen = async (
+    ctx: AuthContext,
+    issued?: { name: string; url: string; expiresAt: string },
+    error?: string,
+  ) => cv.membersPage({
+    members: await onboard.listMembers(ctx, deps.db),
+    issued,
+    error,
+  });
+
+  app.get('/admin/members', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
+    return html(await membersScreen(ctx));
+  });
+
+  app.post('/admin/members/:id/activate', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
+    try {
+      const { token, fullName, expiresAt } = await onboard.issueFirstActivation(
+        ctx, deps.db, c.req.param('id') as never,
+        passkey.sha256, passkey.randomToken, deps.now,
+      );
+      // `t`, not `token` — /login/activate reads `c.req.query('t')`, and a link
+      // built with the wrong parameter name looks valid and silently expires.
+      return html(await membersScreen(ctx, {
+        name: fullName,
+        url: `${deps.rp.origin}/login/activate?t=${token}`,
+        expiresAt,
+      }));
+    } catch (e) {
+      if (e instanceof Forbidden) return html(await membersScreen(ctx, undefined, e.reasonAr), 403);
+      throw e;
+    }
   });
 
   /* ---- annual statement (CP-7) ------------------------------------------ */

@@ -100,6 +100,21 @@ export interface HomeData {
   /** Unread messages, for the nav badge. */
   unread?: number;
   demo?: boolean;
+  /**
+   * Board screens this particular caller is allowed to open.
+   *
+   * Every admin screen existed and none of them was linked from anywhere: the
+   * five nav tabs are the resident's, and an admin who logged in landed on the
+   * same home page as everyone else with no way forward except typing
+   * `/admin/…` into the address bar. A board of retired doctors will not do
+   * that, so in practice the whole admin half of the portal was unreachable.
+   *
+   * The list is computed from `can()` per caller — never rendered and then
+   * hidden with CSS. A link that appears is a link that works; the route
+   * re-checks the same capability anyway (permissions live in the database,
+   * not in the markup), so this is navigation, not enforcement.
+   */
+  adminLinks?: { href: string; icon: string; label: string }[];
 }
 
 export function homePage(d: HomeData): string {
@@ -143,7 +158,19 @@ ${d.pinned ? `<div class="banner info"><strong>📌 ${esc(d.pinned.title)}</stro
     <div class="note">${esc(t.finance.heldInTrustNote)}</div>
   </div>
 </div>
-<a class="btn btn-2" href="/finance">${esc(t.finance.title)} ←</a>`);
+<a class="btn btn-2" href="/finance">${esc(t.finance.title)} ←</a>
+
+${(d.adminLinks ?? []).length > 0 ? `
+<h2>${esc(t.home.boardTools)}</h2>
+<div class="card">
+  <p class="muted" style="margin-block-start:0">${esc(t.home.boardToolsHint)}</p>
+  <div class="tiles">
+    ${(d.adminLinks ?? []).map(l => `
+    <a class="tile" href="${esc(l.href)}" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
+      <div class="lbl"><span class="ico" aria-hidden="true">${esc(l.icon)}</span>${esc(l.label)}</div>
+    </a>`).join('')}
+  </div>
+</div>` : ''}`);
 }
 
 /* ===================================================================== */
