@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>الأرشيف — بوابة قرية الأطباء</title>
+<title>سجل التغييرات — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -298,13 +298,13 @@ header .htext{flex:1;min-inline-size:0}
   <div class="hctl">
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/audit">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/audit">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -313,10 +313,10 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
   <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
   <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
-  <a href="/news" aria-current="page"><span class="ico" aria-hidden="true">📰</span>أخبار</a>
+  <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
 </nav>
 <a class="fab" href="/help">💬 محتاج مساعدة؟</a>
@@ -325,69 +325,13 @@ header .htext{flex:1;min-inline-size:0}
 
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
-<a class="backlink" href="/news">→ رجوع للأخبار</a>
 <div class="card">
-  <h2 style="margin-block-start:0">الأرشيف</h2>
-  <p class="muted">كل حاجة اتنشرت من أول يوم، مترتبة بالسنة والشهر.</p>
+  <h2 style="margin-block-start:0">سجل التغييرات</h2>
+  <p class="muted">كل تعديل في النظام، مين عمله وإمتى — مش بيتمسح ومش بيتعدّل</p>
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2026</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2026/07">
-      يوليو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/06">
-      يونيو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/04">
-      أبريل
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/02">
-      فبراير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/01">
-      يناير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-  </div>
-</div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2025</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2025/11">
-      نوفمبر
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2025/05">
-      مايو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-  </div>
-</div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2024</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2024/08">
-      أغسطس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2024/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-  </div>
+  <div class="empty"><div class="big" aria-hidden="true">📜</div><p>السجل فاضي</p><p class="muted">أول ما يحصل أي تعديل هيظهر هنا.</p></div>
 </div>
 </main>
 </div>

@@ -176,6 +176,137 @@ describe('every mutating path leaves an audit trail', () => {
     assert.equal(lastAudit().action, 'session.revoke_all');
   });
 
+  it('createCategory and activateCategory are audited, and الوديعة cannot be income', async () => {
+    const before = auditCount();
+    const acc = raw.prepare(
+      `SELECT id FROM accounts WHERE type='income' ORDER BY code LIMIT 1`).get() as { id: string };
+    const liab = raw.prepare(
+      `SELECT id FROM accounts WHERE type='liability' ORDER BY code LIMIT 1`).get() as { id: string };
+
+    const cid = await m.createCategory(admin, db, {
+      nameAr: 'اشتراك الصيانة الإضافي', direction: 'income',
+      kind: 'operating_income', ledgerAccountId: acc.id as never, icon: '🔧',
+    });
+    assert.equal(lastAudit().action, 'category.create');
+
+    // ⭐ 06 §1: a deposit category pointing at an INCOME account is the single
+    // most expensive mistake in this domain. The trigger refuses it, not us.
+    await assert.rejects(() => m.createCategory(admin, db, {
+      nameAr: 'وديعة', direction: 'income', kind: 'deposit',
+      ledgerAccountId: acc.id as never,
+    }), /وديعة|التزام|liability|حساب/, 'a deposit category was booked against income');
+
+    // ...and the correct pairing is accepted, so the refusal is about the
+    // pairing and not about deposits being unusable.
+    await m.createCategory(admin, db, {
+      nameAr: 'وديعة الملاك', direction: 'income', kind: 'deposit',
+      ledgerAccountId: liab.id as never,
+    });
+
+    await m.deactivateCategory(admin, db, cid as never);
+    await m.activateCategory(admin, db, cid as never);
+    assert.equal(lastAudit().action, 'category.activate');
+    assert.equal(auditCount(), before + 4);   // the refused one wrote nothing
+  });
+
+  it('a retired category keeps its history rather than blocking on it', async () => {
+    // The old rule refused to retire a category with ANY payment or expense
+    // against it, which made retirement impossible for every category worth
+    // retiring — and the "move them to another category first" it demanded
+    // would have rewritten history: journal_lines carries its own category_id,
+    // so moving a settled payment makes the receipt and the ledger disagree
+    // about where the money went, and last year's chart changes shape.
+    //
+    // A closed receipt is history. Only work IN FLIGHT may block.
+    const cat = raw.prepare(
+      `SELECT id FROM categories WHERE direction='income' AND is_active=1 LIMIT 1`)
+      .get() as { id: string };
+    raw.prepare(
+      `INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,
+         claimed_amount_piastres,reviewed_by,reviewed_at,review_reason_ar,
+         method,transfer_date,storage_key,status)
+       VALUES (?,?,?,?,?,?,?,?,?,'instapay','2025-04-04',?,'rejected')`)
+      .run(id('PAY', 90), 'R-2025-00090', U1, P_RES, cat.id, 250000,
+           P_ADMIN, '2025-04-05T09:00:00Z', 'الصورة مش واضحة', 'receipts/old.webp');
+
+    await m.deactivateCategory(admin, db, cat.id as never);
+
+    const still = raw.prepare(
+      `SELECT COUNT(*) n FROM payments WHERE category_id = ?`).get(cat.id) as { n: number };
+    assert.equal(still.n, 1, 'retiring a category touched its history');
+
+    // ...and one still under review DOES block, which is the part that protects
+    // a resident from a receipt that can never be decided.
+    raw.prepare(
+      `INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,
+         claimed_amount_piastres,method,transfer_date,storage_key,status)
+       VALUES (?,?,?,?,?,?,'instapay','2026-04-04',?,'under_review')`)
+      .run(id('PAY', 91), 'R-2026-00091', U1, P_RES, cat.id, 250000, 'receipts/new.webp');
+    await m.activateCategory(admin, db, cat.id as never);
+    await assert.rejects(() => m.deactivateCategory(admin, db, cat.id as never),
+      /تحت المراجعة/, 'a category with a receipt under review was retired');
+
+    raw.prepare(`DELETE FROM payments WHERE id=?`).run(id('PAY', 91));
+  });
+
+  it('setPersonActive is audited and takes the sessions and passkeys with it', async () => {
+    const x = (sql: string, ...p: unknown[]) => raw.prepare(sql).run(...p as never[]);
+    x(`INSERT INTO passkeys (id,profile_id,credential_id,public_key,sign_count,rp_id,device_label_ar)
+       VALUES (?,?,?,?,?,?,?)`, id('PSK', 80), P_RES, 'cred-deact',
+       new Uint8Array([7]), 1, 'localhost', 'موبايله');
+    x(`INSERT INTO sessions (id,profile_id,token_hash,expires_at) VALUES (?,?,?,?)`,
+      id('SES', 80), P_RES, sha('tok-deact'), '2027-01-01T00:00:00Z');
+
+    const before = auditCount();
+    await m.setPersonActive(admin, db, P_RES as never, false, NOW);
+    assert.equal(lastAudit().action, 'user.deactivate');
+    assert.equal(auditCount(), before + 1);
+
+    // "deactivated" means nothing if the cookie in their pocket still works
+    assert.equal(await resolveAuthContext(db, 'tok-deact', NOW), null,
+      'a deactivated person kept a live session');
+    const pk = raw.prepare(
+      `SELECT COUNT(*) n FROM passkeys WHERE profile_id=? AND revoked_at IS NULL`)
+      .get(P_RES) as { n: number };
+    assert.equal(pk.n, 0, 'a deactivated person kept a usable passkey');
+
+    await m.setPersonActive(admin, db, P_RES as never, true, NOW);
+    assert.equal(lastAudit().action, 'user.activate');
+  });
+
+  it('⭐ nobody changes their own role, and the developer account is untouchable', async () => {
+    await assert.rejects(() => m.assignRole(admin, db, P_ADMIN as never, 'resident'),
+      /بنفسك|forbidden/, 'an admin edited their own role');
+    await assert.rejects(() => m.setPersonActive(admin, db, P_ADMIN as never, false, NOW),
+      /بنفسك|forbidden/, 'an admin deactivated themselves');
+    await assert.rejects(() => m.assignRole(dev, db, P_DEV as never, 'resident'),
+      /بنفسك|المبرمج|forbidden/, 'the developer demoted themselves');
+    await assert.rejects(() => m.setPersonActive(admin, db, P_DEV as never, false, NOW),
+      /المبرمج|forbidden/, 'an admin deactivated the founder account');
+    await assert.rejects(() => m.assignRole(dev, db, P_RES as never, 'developer' as never),
+      /مش بيتوزّع|forbidden/, 'the developer role was handed out from the product');
+  });
+
+  it('addStaff and endStaff are audited, and reading a salary is not editing it', async () => {
+    const before = auditCount();
+    const sid = await m.addStaff(admin, db, {
+      fullName: 'عم رجب الحارس', jobTitleAr: 'حارس', monthlySalaryPiastres: 350000,
+      startedOn: '2026-01-01',
+    });
+    assert.equal(lastAudit().action, 'staff.add');
+    // an operator may read the payroll and must never write it
+    await assert.rejects(() => m.addStaff(operator, db, {
+      fullName: 'حد تاني', jobTitleAr: 'سبّاك', monthlySalaryPiastres: 1,
+    }), /صلاحيات|forbidden/, 'an operator changed the payroll');
+    await m.endStaff(admin, db, sid as never, '2026-09-30');
+    assert.equal(lastAudit().action, 'staff.end');
+    const row = raw.prepare(`SELECT is_active, ended_on FROM staff WHERE id=?`).get(sid) as
+      { is_active: number; ended_on: string };
+    assert.equal(row.is_active, 0);
+    assert.equal(row.ended_on, '2026-09-30');
+    assert.equal(auditCount(), before + 2);
+  });
+
   it('EVERY function named in MUTATING_FUNCTIONS was exercised above', () => {
     // Enumerated on purpose: adding a mutation without adding it here — and
     // therefore without a coverage test — fails this assertion.
@@ -183,6 +314,7 @@ describe('every mutating path leaves an audit trail', () => {
       'recordExpense', 'countersignExpense', 'deactivateCategory', 'renameCategory',
       'grantDelegate', 'revokeDelegate', 'assignRole', 'revokeAllSessions',
       'updateSettings', 'changePhoneNumber',
+      'createCategory', 'activateCategory', 'setPersonActive', 'addStaff', 'endStaff',
     ]);
     for (const name of m.MUTATING_FUNCTIONS) {
       assert.ok(exercised.has(name), `${name} has no audit-coverage test`);

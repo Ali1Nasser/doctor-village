@@ -71,12 +71,16 @@ before(() => {
   x(`INSERT INTO units (id,building_id,unit_number) VALUES (?,?,'101')`, U1, B1);
   x(`INSERT INTO fiscal_periods (id,name_ar,starts_on,ends_on,status)
      VALUES (?,'2026','2026-01-01','2026-12-31','open')`, PERIOD);
+  // Migration 0022 refuses a due inserted against a PUBLISHED period: a
+  // published amount is what a resident was told they owe. So the fixture
+  // does what the product does — draft, bill, then publish.
   x(`INSERT INTO fee_periods (id,name_ar,category_id,fiscal_period_id,starts_on,ends_on,
        due_on,basis,amount_piastres,is_published,created_by)
      VALUES (?,'اشتراك 2026',?,?,'2026-01-01','2026-12-31','2026-03-31','per_unit',
-       250000,1,?)`, FEEP, CAT_IN, PERIOD, P_MAKER);
+       250000,0,?)`, FEEP, CAT_IN, PERIOD, P_MAKER);
   x(`INSERT INTO unit_dues (id,fee_period_id,unit_id,amount_piastres)
      VALUES (?,?,?,250000)`, DUE, FEEP, U1);
+  x(`UPDATE fee_periods SET is_published=1 WHERE id=?`, FEEP);
   x(`INSERT INTO reconciliations (id,account_id,period_id,as_of,statement_balance_piastres,
        book_balance_piastres,difference_piastres,notes_ar,done_by)
      VALUES (?,?,?,'2026-07-31',100000,97000,3000,'فرق مش مفسّر',?)`,
@@ -206,11 +210,19 @@ describe('⭐ credit ceilings — the village cannot discharge what it does not 
   });
 
   it('an apply larger than the outstanding due is refused BY THE DATABASE', () => {
-    // Bypassing the data layer entirely: the due is 2,500.00 and the credit
-    // 1,000.00, so this is under the credit ceiling and over the due ceiling —
-    // which isolates the second trigger from the first.
-    raw.prepare(`UPDATE unit_dues SET amount_piastres = 50000 WHERE id = ?`)
-      .run(DUE as never);
+    // Bypassing the data layer entirely, to isolate the second trigger from the
+    // first: the apply has to be UNDER the credit ceiling and OVER the due one.
+    //
+    // The outstanding due is lowered with a WAIVER rather than by editing the
+    // billed amount, because migration 0022 refuses the edit — 2,500.00 is what
+    // the resident was told they owe, and a waiver is the mechanism that exists
+    // for changing what they have to pay without rewriting that. The trigger
+    // nets waivers off, which is the behaviour being relied on here.
+    raw.prepare(
+      `UPDATE unit_dues SET waived_piastres = 200000,
+         waiver_reason_ar = 'قرار مجلس — ظروف اجتماعية موثّقة',
+         waived_by = ?, waived_at = '2026-05-01T10:00:00Z'
+        WHERE id = ?`).run(P_MAKER as never, DUE as never);
     assert.throws(
       () => raw.prepare(
         `INSERT INTO credit_operations (id,credit_id,unit_id,operation,amount_piastres,

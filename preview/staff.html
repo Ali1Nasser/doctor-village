@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>الأرشيف — بوابة قرية الأطباء</title>
+<title>الموظفين والمرتبات — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -298,13 +298,13 @@ header .htext{flex:1;min-inline-size:0}
   <div class="hctl">
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/staff">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/staff">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -313,10 +313,10 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
   <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
   <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
-  <a href="/news" aria-current="page"><span class="ico" aria-hidden="true">📰</span>أخبار</a>
+  <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
 </nav>
 <a class="fab" href="/help">💬 محتاج مساعدة؟</a>
@@ -325,68 +325,203 @@ header .htext{flex:1;min-inline-size:0}
 
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
-<a class="backlink" href="/news">→ رجوع للأخبار</a>
 <div class="card">
-  <h2 style="margin-block-start:0">الأرشيف</h2>
-  <p class="muted">كل حاجة اتنشرت من أول يوم، مترتبة بالسنة والشهر.</p>
+  <h2 style="margin-block-start:0">الموظفين والمرتبات</h2>
+  <p class="muted">اللي بيشتغلوا في القرية وبيتصرف عليهم من الاشتراكات</p>
+  
+  
+  <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
+    <div class="lbl">إجمالي المرتبات الشهرية</div>
+    <div class="v"><bdi dir="ltr" class="num">28,800.00</bdi> <span class="cur">ج.م</span></div>
+  </div>
+</div>
+
+
+<div class="card">
+  <h3 style="margin-block-start:0">➕ ضيف موظف</h3>
+  <form method="post" action="/admin/staff">
+    <div class="field">
+      <label for="stn">الاسم</label>
+      <input id="stn" name="name" required>
+    </div>
+    <div class="field">
+      <label for="stj">الوظيفة</label>
+      <input id="stj" name="job" required>
+    </div>
+    <div class="field">
+      <label for="sts">المرتب الشهري</label>
+      <input id="sts" name="salary" inputmode="decimal" required placeholder="0.00">
+    </div>
+    <div class="field">
+      <label for="std">تاريخ البدء</label>
+      <input id="std" name="started_on" type="date">
+    </div>
+    <button class="btn" type="submit">ضيف</button>
+  </form>
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2026</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2026/07">
-      يوليو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/06">
-      يونيو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/04">
-      أبريل
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/02">
-      فبراير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/01">
-      يناير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
+  
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>عم حسن الديب</b>
+      <span class="muted">جنايني
+        · <bdi dir="ltr" class="num">3,800.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000005/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000005">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000005" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
   </div>
-</div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2025</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2025/11">
-      نوفمبر
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2025/05">
-      مايو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>عم رجب عبد الله</b>
+      <span class="muted">حارس أمن
+        · <bdi dir="ltr" class="num">4,000.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000001/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000001">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000001" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
   </div>
-</div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2024</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2024/08">
-      أغسطس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2024/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>عم سيد محروس</b>
+      <span class="muted">حارس أمن
+        · <bdi dir="ltr" class="num">4,000.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000002/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000002">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000002" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>عم ممدوح سالم</b>
+      <span class="muted">سباك
+        · <bdi dir="ltr" class="num">4,500.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000007/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000007">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000007" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>عم فتحي إبراهيم</b>
+      <span class="muted">عامل نظافة
+        · <bdi dir="ltr" class="num">3,500.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000003/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000003">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000003" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>عم صابر علي</b>
+      <span class="muted">عامل نظافة
+        · <bdi dir="ltr" class="num">3,500.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000004/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000004">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000004" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">👷</span>
+    <span class="row-body">
+      <b>م. أشرف زكي</b>
+      <span class="muted">فني كهرباء
+        · <bdi dir="ltr" class="num">5,500.00</bdi> <span class="cur">ج.م</span>
+         · <bdi dir="ltr" class="num">1</bdi> يونيو <bdi dir="ltr" class="num">2024</bdi></span>
+      
+    </span>
+    <span class="row-end">
+      
+      <details>
+        <summary class="btn btn-2 btn-sm">أنهِ الخدمة</summary>
+        <form method="post" action="/admin/staff/DEMOSTF0000000000000000006/end">
+          <div class="field">
+            <label for="e-DEMOSTF0000000000000000006">تاريخ الانتهاء</label>
+            <input id="e-DEMOSTF0000000000000000006" name="ended_on" type="date" required>
+          </div>
+          <button class="btn btn-2" type="submit">أنهِ الخدمة</button>
+        </form>
+      </details>
+    </span>
   </div>
 </div>
 </main>

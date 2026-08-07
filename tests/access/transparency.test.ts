@@ -170,13 +170,17 @@ before(async () => {
      VALUES (?,?,?,?,'open')`, PERIOD, 'السنة المالية 2026', '2026-01-01', '2026-12-31');
   const cSubs = raw.prepare(`SELECT id FROM categories WHERE kind='operating_income' LIMIT 1`)
     .get() as { id: string };
+  // Migration 0022 refuses a due inserted against a PUBLISHED period: a
+  // published amount is what a resident was told they owe. So the fixture
+  // does what the product does — draft, bill, then publish.
   x(`INSERT INTO fee_periods (id,name_ar,category_id,fiscal_period_id,starts_on,ends_on,
        due_on,basis,amount_piastres,is_published,created_by)
-     VALUES (?,?,?,?,'2026-01-01','2026-12-31','2026-03-31','per_unit',600000,1,?)`,
+     VALUES (?,?,?,?,'2026-01-01','2026-12-31','2026-03-31','per_unit',600000,0,?)`,
     FEEP, 'اشتراك 2026', cSubs.id, PERIOD, ADMIN);
   for (const [i, u] of [U101, U102, U103].entries())
     x(`INSERT INTO unit_dues (id,fee_period_id,unit_id,amount_piastres) VALUES (?,?,?,600000)`,
       id('DUE', i + 1), FEEP, u);
+  x(`UPDATE fee_periods SET is_published=1 WHERE id=?`, FEEP);
 
   /* Payments.
    *

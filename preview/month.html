@@ -181,9 +181,37 @@ nav.bottom .ico{font-size:1.2rem}
   border-radius:999px;background:var(--surface);border:1px solid var(--border);
   color:var(--ink-muted);text-decoration:none;font-size:.9rem;font-weight:600}
 .tab.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+/* .row and .row-body were used by every CP-6 list and never defined — the
+   markup was shipping and falling back to plain block layout, which reads as
+   "the icon is on its own line and the button is full-width" rather than as a
+   list. Defining them here rather than per-screen is what makes news, members,
+   categories and staff look like the same product. */
+.row{display:flex;align-items:flex-start;gap:12px;padding-block:12px;
+  border-block-end:1px solid var(--border)}
+.row:last-child{border-block-end:none}
+.row .ico{flex:0 0 34px;inline-size:34px;block-size:34px;display:grid;place-items:center;
+  border-radius:10px;background:var(--surface-2);font-size:1.05rem}
+.row-body{display:flex;flex-direction:column;gap:3px;min-inline-size:0;flex:1}
+.row-body .muted{font-size:.85rem;line-height:1.6}
+.row-body .chip{align-self:flex-start;margin-block-start:4px}
+.row-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .row-link{text-decoration:none;color:inherit}
 .row-link:hover{background:var(--surface-2)}
-.row-end{margin-inline-start:auto;color:var(--ink-muted);flex:none}
+.row-end{margin-inline-start:auto;color:var(--ink-muted);flex:none;display:flex;
+  flex-direction:column;gap:6px;align-items:stretch}
+/* Two short inputs side by side — a date range, a quiet-hours pair. Collapses
+   on a narrow phone, because two date pickers at 360px are two unusable ones. */
+.field-row{display:flex;gap:12px;flex-wrap:wrap}
+.field-row .field{flex:1;min-inline-size:150px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn-row .btn{inline-size:auto;margin-block-start:0}
+.btn-sm{min-block-size:38px;font-size:.9rem;padding:6px 12px;inline-size:auto;margin-block-start:0}
+/* A wide table must scroll INSIDE its card. Letting the page scroll sideways
+   in RTL puts the start of every line off-screen. */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.table-wrap table{min-inline-size:520px}
+.field.check label{display:flex;align-items:flex-start;gap:10px;font-weight:600;cursor:pointer}
+.field.check input{inline-size:22px;block-size:22px;flex:none;margin-block-start:2px}
 .backlink{display:inline-flex;align-items:center;min-block-size:var(--tap);
   color:var(--brand);text-decoration:none;font-weight:600;margin-block-end:8px}
 .prose{line-height:1.85}

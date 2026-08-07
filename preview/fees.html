@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>الأرشيف — بوابة قرية الأطباء</title>
+<title>الاشتراكات والمستحقات — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -298,13 +298,13 @@ header .htext{flex:1;min-inline-size:0}
   <div class="hctl">
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/fees">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/fees">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -313,10 +313,10 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
   <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
   <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
-  <a href="/news" aria-current="page"><span class="ico" aria-hidden="true">📰</span>أخبار</a>
+  <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
 </nav>
 <a class="fab" href="/help">💬 محتاج مساعدة؟</a>
@@ -325,70 +325,92 @@ header .htext{flex:1;min-inline-size:0}
 
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
-<a class="backlink" href="/news">→ رجوع للأخبار</a>
 <div class="card">
-  <h2 style="margin-block-start:0">الأرشيف</h2>
-  <p class="muted">كل حاجة اتنشرت من أول يوم، مترتبة بالسنة والشهر.</p>
+  <h2 style="margin-block-start:0">الاشتراكات والمستحقات</h2>
+  <p class="muted">اعمل اشتراك السنة، وزّعه على الوحدات، وبعدين انشره للسكان</p>
+  
+  
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2026</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2026/07">
-      يوليو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/06">
-      يونيو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/04">
-      أبريل
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/02">
-      فبراير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/01">
-      يناير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-  </div>
+  <h3 style="margin-block-start:0">➕ اشتراك جديد</h3>
+  <form method="post" action="/admin/fees">
+    <div class="field">
+      <label for="fname">اسم الاشتراك</label>
+      <input id="fname" name="name" required placeholder="زي «اشتراك 2027»">
+    </div>
+    <div class="field">
+      <label for="fcat">البند</label>
+      <select id="fcat" name="category" required>
+        <option value="CAT0000000000000000000IN01">اشتراك الصيانة السنوي</option><option value="CAT0000000000000000000IN02">وديعة</option><option value="CAT0000000000000000000IN03">مساهمات خاصة</option><option value="CAT0000000000000000000IN04">غرامات تأخير</option><option value="CAT0000000000000000000IN99">إيرادات أخرى</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fyear">السنة المالية</label>
+      <select id="fyear" name="year" required>
+        <option value="DEMOFPR0000000000000000001">السنة المالية 2026</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="fstart">من تاريخ</label>
+        <input id="fstart" name="starts_on" type="date" required>
+      </div>
+      <div class="field">
+        <label for="fend">لغاية تاريخ</label>
+        <input id="fend" name="ends_on" type="date" required>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fdue">تاريخ الاستحقاق</label>
+      <input id="fdue" name="due_on" type="date" required>
+    </div>
+    <div class="field">
+      <label for="fbasis">الأساس</label>
+      <select id="fbasis" name="basis">
+        <option value="per_unit">مبلغ ثابت لكل وحدة</option>
+        <option value="per_sqm">بالمتر المربع</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="famount">المبلغ</label>
+      <input id="famount" name="amount" inputmode="decimal" required placeholder="0.00"
+             aria-describedby="famount-hint">
+      <p class="hint" id="famount-hint">بالجنيه لكل وحدة</p>
+    </div>
+    <button class="btn" type="submit">اعمل مسودة</button>
+  </form>
 </div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2025</bdi></h3>
-  <div class="chipgrid">
+
+
+  <div class="card" style="border-inline-start:5px solid var(--ok)">
+    <div class="row-head">
+      <h3 style="margin-block-start:0">اشتراك الصيانة السنوي 2026</h3>
+      <span class="chip ok">منشور</span>
+    </div>
+    <p class="muted">اشتراك الصيانة السنوي · <bdi dir="ltr" class="num">1</bdi> يناير <bdi dir="ltr" class="num">2026</bdi> → <bdi dir="ltr" class="num">31</bdi> ديسمبر <bdi dir="ltr" class="num">2026</bdi>
+      · تاريخ الاستحقاق <bdi dir="ltr" class="num">31</bdi> مارس <bdi dir="ltr" class="num">2026</bdi></p>
+
+    <div class="tiles">
+      <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
+        <div class="lbl">وحدة</div>
+        <div class="v"><bdi dir="ltr" class="num">204</bdi></div>
+      </div>
+      <div class="tile" style="--tc:var(--ok);--tsoft:var(--ok-soft)">
+        <div class="lbl">الإجمالي</div>
+        <div class="v"><bdi dir="ltr" class="num">1,224,000.00</bdi> <span class="cur">ج.م</span></div>
+      </div>
+    </div>
+    <p class="muted">معفى: <bdi dir="ltr" class="num">12,000.00</bdi> <span class="cur">ج.م</span></p>
+
     
-    <a class="chiplink" href="/news/archive/2025/11">
-      نوفمبر
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2025/05">
-      مايو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-  </div>
-</div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2024</bdi></h3>
-  <div class="chipgrid">
+
+    <div class="btn-row">
+      <a class="btn btn-2" href="/admin/fees/DEMOFEE0000000000000000001">شوف الوحدات</a>
+      
+    </div>
     
-    <a class="chiplink" href="/news/archive/2024/08">
-      أغسطس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2024/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
   </div>
-</div>
 </main>
 </div>
 

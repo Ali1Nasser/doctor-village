@@ -193,33 +193,117 @@ export async function countersignExpense(
  * (CP-5 gate). Orphaned transactions are how a category breakdown silently
  * stops adding up to the total.
  */
+/**
+ * Add a category.
+ *
+ * `trg_category_account_matches_kind` (0002) is the control that matters here
+ * and it is not re-implemented below: a `deposit` category MUST point at a
+ * liability account, because الوديعة is money the village owes back and booking
+ * it as income is the most expensive single mistake available in this domain
+ * (06 §1). The trigger refuses in Arabic; `asRefusal` carries that sentence to
+ * the screen unchanged.
+ */
+export async function createCategory(
+  ctx: AuthContext, db: Db,
+  c: { nameAr: string; direction: 'income' | 'expense'; kind: string;
+       ledgerAccountId: Id; icon?: string | null },
+): Promise<string> {
+  require_(ctx.role, 'category.manage');
+  if (!c.nameAr?.trim()) throw new LedgerRefused('اكتب اسم البند');
+  const id = newId('CAT');
+  await mutate(db, ctx,
+    { action: 'category.create', table: 'categories', entityId: id,
+      after: { name: c.nameAr.trim(), direction: c.direction, kind: c.kind } },
+    db.prepare(
+      `INSERT INTO categories (id, name_ar, direction, kind, ledger_account_id, icon,
+         sort_order, is_active)
+       VALUES (?,?,?,?,?,?, (SELECT COALESCE(MAX(sort_order),0)+10 FROM categories), 1)`
+    ).bind(id, c.nameAr.trim(), c.direction, c.kind, c.ledgerAccountId, c.icon || null),
+  );
+  return id;
+}
+
+/**
+ * Retire a category.
+ *
+ * This used to refuse if ANY payment or expense referenced the category, and
+ * told the admin to "move them to another category first". Two things were
+ * wrong with that. It made retirement impossible in practice — every category
+ * worth retiring is one that was used — and the reassignment it demanded would
+ * have rewritten history: `journal_lines` carries its own `category_id`, so
+ * moving a POSTED payment to a different category makes the receipt and the
+ * ledger disagree about where the money went, silently, with last year's
+ * expense-by-category chart changing shape after the fact.
+ *
+ * Deactivating is not deleting. The category disappears from the forms; every
+ * historical row keeps pointing at it and every past chart stays true.
+ *
+ * What is refused is retiring a category with work IN FLIGHT — a receipt still
+ * under review, or a published subscription billed against it. Those would
+ * break in front of a resident with nothing they could do about it.
+ */
 export async function deactivateCategory(ctx: AuthContext, db: Db, categoryId: Id): Promise<void> {
   require_(ctx.role, 'category.manage');
-  const inUse = await db.prepare(
-    `SELECT (SELECT COUNT(*) FROM payments WHERE category_id = ?)
-          + (SELECT COUNT(*) FROM expenses WHERE category_id = ?) AS n`
-  ).bind(categoryId, categoryId).first<{ n: number }>();
-  if ((inUse?.n ?? 0) > 0) {
+  const c = await db.prepare(
+    `SELECT (SELECT COUNT(*) FROM payments p
+              WHERE p.category_id = ? AND p.status IN ('draft','submitted','under_review'))
+              AS in_flight,
+            (SELECT COUNT(*) FROM expenses e
+              WHERE e.category_id = ? AND e.journal_entry_id IS NULL AND e.status <> 'reversed')
+              AS unposted,
+            (SELECT COUNT(*) FROM fee_periods f
+              WHERE f.category_id = ? AND f.is_published = 1) AS live_fees`
+  ).bind(categoryId, categoryId, categoryId)
+   .first<{ in_flight: number; unposted: number; live_fees: number }>();
+
+  if ((c?.in_flight ?? 0) > 0) {
     throw new LedgerRefused(
-      `البند ده عليه ${inUse!.n} عملية. لازم تنقلهم لبند تاني الأول قبل ما تقفله.`);
+      'فيه إيصالات لسه تحت المراجعة على البند ده. خلّص مراجعتها الأول وبعدين اقفله.');
   }
-  await mutate(db, ctx,
+  if ((c?.unposted ?? 0) > 0) {
+    throw new LedgerRefused(
+      'فيه مصروفات على البند ده لسه ماترحّلتش على الدفاتر. رحّلها الأول.');
+  }
+  if ((c?.live_fees ?? 0) > 0) {
+    throw new LedgerRefused(
+      'فيه اشتراك منشور شغّال على البند ده — قفله هيكسر حساب المطلوب من السكان.');
+  }
+
+  const changed = await mutate(db, ctx,
     { action: 'category.deactivate', table: 'categories', entityId: categoryId },
-    db.prepare(`UPDATE categories SET is_active = 0 WHERE id = ?`).bind(categoryId),
+    db.prepare(`UPDATE categories SET is_active = 0 WHERE id = ? AND is_active = 1`)
+      .bind(categoryId),
   );
+  if (changed !== 1) throw new NotFound('البند ده مش موجود أو مقفول خلاص');
+}
+
+/** Put a retired category back on the forms. The mirror of the above, and the
+ *  reason retiring one is not frightening. */
+export async function activateCategory(ctx: AuthContext, db: Db, categoryId: Id): Promise<void> {
+  require_(ctx.role, 'category.manage');
+  const changed = await mutate(db, ctx,
+    { action: 'category.activate', table: 'categories', entityId: categoryId },
+    db.prepare(`UPDATE categories SET is_active = 1 WHERE id = ? AND is_active = 0`)
+      .bind(categoryId),
+  );
+  if (changed !== 1) throw new NotFound('البند ده مش موجود أو شغّال خلاص');
 }
 
 export async function renameCategory(
-  ctx: AuthContext, db: Db, categoryId: Id, nameAr: string,
+  ctx: AuthContext, db: Db, categoryId: Id, nameAr: string, icon?: string | null,
 ): Promise<void> {
   require_(ctx.role, 'category.manage');
-  const before = await db.prepare(`SELECT name_ar FROM categories WHERE id = ?`)
-    .bind(categoryId).first<{ name_ar: string }>();
+  if (!nameAr?.trim()) throw new LedgerRefused('اكتب اسم البند');
+  const before = await db.prepare(`SELECT name_ar, icon FROM categories WHERE id = ?`)
+    .bind(categoryId).first<{ name_ar: string; icon: string | null }>();
   if (!before) throw new NotFound();
+  // `icon === undefined` means "not part of this edit"; `null` means "clear it".
+  const nextIcon = icon === undefined ? before.icon : (icon || null);
   await mutate(db, ctx,
     { action: 'category.rename', table: 'categories', entityId: categoryId,
-      before: { name: before.name_ar }, after: { name: nameAr } },
-    db.prepare(`UPDATE categories SET name_ar = ? WHERE id = ?`).bind(nameAr, categoryId),
+      before: { name: before.name_ar }, after: { name: nameAr.trim() } },
+    db.prepare(`UPDATE categories SET name_ar = ?, icon = ? WHERE id = ?`)
+      .bind(nameAr.trim(), nextIcon, categoryId),
   );
 }
 
@@ -264,17 +348,150 @@ export async function revokeDelegate(
 /* Roles, sessions, settings                                             */
 /* ===================================================================== */
 
+/** Roles a screen may hand out. `developer` is absent on purpose — see below. */
+const ASSIGNABLE_ROLES: readonly Role[] = ['resident', 'operator', 'finance_reviewer', 'admin'];
+
+/**
+ * Change somebody's role.
+ *
+ * Four refusals, in order of how badly each one ends:
+ *
+ * 1. **Nobody changes their own role.** An admin editing their own row is the
+ *    shape of every privilege-escalation bug, and it is never necessary — this
+ *    product assumes a second board member exists, everywhere else.
+ * 2. **`admin` needs `user.assign_admin_role`**, a different capability from
+ *    `user.assign_role` (03_RBAC §2 note ¹). An admin can appoint an operator;
+ *    minting another person who can approve money is a higher act.
+ * 3. **`developer` is not assignable from the product at all.** It carries
+ *    `schema.migrate`. Handing that out from a web form is not a board decision.
+ * 4. **A developer's row is not editable from here either** — otherwise the
+ *    founder's account could be demoted by whoever is logged in this afternoon.
+ */
 export async function assignRole(ctx: AuthContext, db: Db, targetId: Id, role: Role): Promise<void> {
-  // Only a developer may create another admin (03_RBAC §2 note ¹).
-  require_(ctx.role, role === 'admin' || role === 'developer' ? 'user.assign_admin_role' : 'user.assign_role');
+  require_(ctx.role, role === 'admin' ? 'user.assign_admin_role' : 'user.assign_role');
+
+  if (!ASSIGNABLE_ROLES.includes(role)) {
+    throw new Forbidden('user.assign_role',
+      'الدور ده مش بيتوزّع من الموقع — حساب المبرمج بيتظبط من قاعدة البيانات مباشرة.');
+  }
+  if (targetId === ctx.personId) {
+    throw new Forbidden('user.assign_role', 'مش ممكن تغيّر دورك بنفسك — لازم عضو تاني يعمله.');
+  }
   const before = await db.prepare(`SELECT role FROM profiles WHERE id=?`).bind(targetId)
     .first<{ role: Role }>();
   if (!before) throw new NotFound();
+  if (before.role === 'developer') {
+    throw new Forbidden('user.assign_role', 'حساب المبرمج مش بيتغيّر من هنا.');
+  }
+  if (before.role === role) return;
+
   await mutate(db, ctx,
     { action: 'user.assign_role', table: 'profiles', entityId: targetId,
       before: { role: before.role }, after: { role } },
-    db.prepare(`UPDATE profiles SET role=? WHERE id=?`).bind(role, targetId),
+    db.prepare(`UPDATE profiles SET role=? WHERE id=? AND role <> 'developer'`)
+      .bind(role, targetId),
   );
+}
+
+/**
+ * Stop an account — a sold flat, somebody who left, a row created by mistake.
+ *
+ * Sessions and passkeys are revoked in the same batch, because otherwise
+ * "deactivated" means nothing until the person next closes their browser: the
+ * session cookie keeps working and the passkey still opens a new one.
+ *
+ * Their payments, their ledger history, and their name on last year's minutes
+ * stay exactly where they are. There is no delete here and there is no delete
+ * anywhere — a portal whose whole purpose is that residents can check the
+ * record cannot also be a portal where the record can be removed.
+ */
+export async function setPersonActive(
+  ctx: AuthContext, db: Db, targetId: Id, active: boolean, now: Clock,
+): Promise<void> {
+  require_(ctx.role, 'user.deactivate');
+  if (targetId === ctx.personId) {
+    throw new Forbidden('user.deactivate', 'مش ممكن توقف حسابك بنفسك.');
+  }
+  const before = await db.prepare(`SELECT role, is_active, full_name FROM profiles WHERE id=?`)
+    .bind(targetId).first<{ role: string; is_active: number; full_name: string }>();
+  if (!before) throw new NotFound();
+  if (before.role === 'developer') {
+    throw new Forbidden('user.deactivate', 'حساب المبرمج مش بيتوقف من هنا.');
+  }
+  if (before.is_active === (active ? 1 : 0)) return;
+
+  const writes: PreparedStatement[] = [
+    db.prepare(`UPDATE profiles SET is_active=? WHERE id=? AND role <> 'developer'`)
+      .bind(active ? 1 : 0, targetId),
+  ];
+  if (!active) {
+    writes.push(
+      db.prepare(`UPDATE sessions SET revoked_at=?, revoked_by=?
+                   WHERE profile_id=? AND revoked_at IS NULL`)
+        .bind(now(), ctx.personId, targetId),
+      db.prepare(`UPDATE passkeys SET revoked_at=?, revoked_by=?
+                   WHERE profile_id=? AND revoked_at IS NULL`)
+        .bind(now(), ctx.personId, targetId),
+    );
+  }
+  await mutate(db, ctx,
+    { action: active ? 'user.activate' : 'user.deactivate', table: 'profiles',
+      entityId: targetId, before: { active: before.is_active },
+      after: { active: active ? 1 : 0, name: before.full_name } },
+    ...writes,
+  );
+}
+
+/* ===================================================================== */
+/* Staff — 04 §9. Names are guarded by a setting; salaries never are.    */
+/* ===================================================================== */
+
+/**
+ * Add somebody to the payroll.
+ *
+ * Requires `settings.edit` on top of `staff.read_salaries`: a finance_reviewer
+ * can see what the village pays its guards and gardener — that is oversight —
+ * and cannot change it. Reading and writing the payroll are different acts.
+ */
+export async function addStaff(
+  ctx: AuthContext, db: Db,
+  s: { fullName: string; jobTitleAr: string; monthlySalaryPiastres: number; startedOn?: string | null },
+): Promise<string> {
+  require_(ctx.role, 'settings.edit');
+  if (!s.fullName?.trim() || !s.jobTitleAr?.trim()) {
+    throw new LedgerRefused('اكتب الاسم والوظيفة');
+  }
+  if (!Number.isInteger(s.monthlySalaryPiastres) || s.monthlySalaryPiastres < 0) {
+    throw new LedgerRefused('المرتب لازم يكون رقم صحيح');
+  }
+  const id = newId('STF');
+  await mutate(db, ctx,
+    { action: 'staff.add', table: 'staff', entityId: id,
+      after: { title: s.jobTitleAr.trim(), salary: s.monthlySalaryPiastres } },
+    db.prepare(
+      `INSERT INTO staff (id, full_name, job_title_ar, monthly_salary_piastres,
+         started_on, is_active) VALUES (?,?,?,?,?,1)`
+    ).bind(id, s.fullName.trim(), s.jobTitleAr.trim(), s.monthlySalaryPiastres,
+           s.startedOn || null),
+  );
+  return id;
+}
+
+/** End someone's service. The row stays — last year's salary expense has to
+ *  keep pointing at a person who existed. */
+export async function endStaff(
+  ctx: AuthContext, db: Db, staffId: Id, endedOn: string,
+): Promise<void> {
+  require_(ctx.role, 'settings.edit');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endedOn ?? '')) {
+    throw new LedgerRefused('اكتب تاريخ انتهاء الخدمة');
+  }
+  const changed = await mutate(db, ctx,
+    { action: 'staff.end', table: 'staff', entityId: staffId, after: { ended: endedOn } },
+    db.prepare(`UPDATE staff SET is_active=0, ended_on=? WHERE id=? AND is_active=1`)
+      .bind(endedOn, staffId),
+  );
+  if (changed !== 1) throw new NotFound('الموظف ده مش موجود أو خدمته منتهية خلاص');
 }
 
 /** "سجّل خروج من كل الأجهزة" — also used by the phone-change path. */
@@ -318,4 +535,5 @@ export const MUTATING_FUNCTIONS = [
   'changePhoneNumber', 'recordExpense', 'countersignExpense', 'deactivateCategory',
   'renameCategory', 'grantDelegate', 'revokeDelegate', 'assignRole',
   'revokeAllSessions', 'updateSettings',
+  'createCategory', 'activateCategory', 'setPersonActive', 'addStaff', 'endStaff',
 ] as const;

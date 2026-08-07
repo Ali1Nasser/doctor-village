@@ -161,21 +161,34 @@ L(f"INSERT INTO delegate_authorizations (id, owner_profile_id, delegate_profile_
 L("\n-- ---------------------------------------------------- fiscal & fees ---")
 L(f"INSERT INTO fiscal_periods (id, name_ar, starts_on, ends_on, status) "
   f"VALUES ({q(PERIOD)},'السنة المالية 2026','2026-01-01','2026-12-31','open');")
+# The period is created as a DRAFT and published at the END, which is the same
+# order the product itself enforces: migration 0022 refuses a due inserted
+# against a published period, because a published amount is what a resident was
+# told they owe. A seed that inserted a published period and then billed flats
+# against it was writing a state the application can never reach — and it is a
+# state the restore path has to reproduce too, which is exactly how a fixture
+# quietly stops testing the real thing.
 L(f"INSERT INTO fee_periods (id, name_ar, category_id, fiscal_period_id, starts_on, ends_on, "
   f"due_on, basis, amount_piastres, is_published, created_by) VALUES "
   f"({q(FEEP)},'اشتراك الصيانة السنوي 2026',{q(C_SUBS)},{q(PERIOD)},'2026-01-01','2026-12-31',"
-  f"'2026-03-31','per_unit',{SUBSCRIPTION_PIASTRES},1,{q(CHAIR)});")
+  f"'2026-03-31','per_unit',{SUBSCRIPTION_PIASTRES},0,{q(CHAIR)});")
 
 L("\n-- dues — one per unit, frozen at generation")
 for i, (uid, b, u, _) in enumerate(units, start=1):
     L(f"INSERT INTO unit_dues (id, fee_period_id, unit_id, amount_piastres) "
       f"VALUES ({q(did('DUE', i))},{q(FEEP)},{q(uid)},{SUBSCRIPTION_PIASTRES});")
 
-# a couple of waivers — appear as waivers, never as payments (06 §4)
+# a couple of waivers — appear as waivers, never as payments (06 §4). Recorded
+# BEFORE publication here only because the seed is one script; in the product a
+# waiver is the one thing that may still be recorded after publication, since it
+# sits beside the amount rather than changing it.
 for i in (17, 88):
     L(f"UPDATE unit_dues SET waived_piastres={SUBSCRIPTION_PIASTRES}, "
       f"waiver_reason_ar='إعفاء بقرار مجلس — ظروف اجتماعية', waived_by={q(CHAIR)}, "
       f"waived_at='2026-04-02T11:00:00Z' WHERE id={q(did('DUE', i))};")
+
+L("\n-- ...and only now is it published, once every flat has been billed")
+L(f"UPDATE fee_periods SET is_published=1 WHERE id={q(FEEP)};")
 
 # =============================================== opening balance ==========
 M = lines_ledger.append

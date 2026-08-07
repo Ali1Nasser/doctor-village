@@ -25,6 +25,9 @@ import { getChannel } from '../lib/auth/channel.js';
 import * as adb from '../lib/db/auth.js';
 import * as drafts from '../lib/db/drafts.js';
 import * as onboard from '../lib/db/onboarding.js';
+import * as fees from '../lib/db/fees.js';
+import * as adm from '../lib/db/admin.js';
+import * as av from './views/admin-pages.js';
 import * as mutations from '../lib/db/mutations.js';
 import * as expenses from '../lib/db/expenses.js';
 import * as push from '../lib/db/push.js';
@@ -278,7 +281,13 @@ export function createApp(deps: AppDeps) {
     add('payment.review', '/admin/review', '🧾', _t.admin.queueTitle);
     add('payment.read_any', '/admin/payments', '✅', _t.admin.approvedTitle);
     add('expense.record', '/admin/expenses', '💸', _t.expenses.title);
+    add('fee.manage', '/admin/fees', '📅', _t.fees.title);
     add('post.publish', '/admin/content', '✍️', _t.content.manage);
+    add('category.manage', '/admin/categories', '🏷️', _t.categories.title);
+    add('user.assign_role', '/admin/users', '🛡️', _t.users.title);
+    add('staff.read_names', '/admin/staff', '👷', _t.staffAdmin.title);
+    add('audit.read', '/admin/audit', '📜', _t.auditView.title);
+    add('settings.edit', '/admin/settings', '⚙️', _t.settings.title);
     add('system.read_quota', '/admin/health', '📊', _t.health.title);
     return out;
   };
@@ -1362,6 +1371,315 @@ export function createApp(deps: AppDeps) {
       if (e instanceof Forbidden) return html(await membersScreen(ctx, '', undefined, e.reasonAr), 403);
       throw e;
     }
+  });
+
+  /* ---- fees: opening the year (CP-5) ------------------------------------ */
+
+  /**
+   * The subscription the whole product bills against.
+   *
+   * `fee_periods` and `unit_dues` drive «المطلوب منك» on the home screen, the
+   * arrears figure, the statement and `v_unit_balance` — and until now they
+   * could only be populated by the demo seed. The portal could display a year
+   * it had been handed and could not begin one, so it could be demonstrated and
+   * not operated.
+   *
+   * Three steps, deliberately not one button: draft → distribute → publish.
+   * The middle step's output is what the board has to look at, because the
+   * failure this flow is arranged around is publishing a subscription that
+   * billed 180 of 204 flats and looked like a success. `missing_units` is on
+   * the screen for exactly that reason, and stays there until it is zero or
+   * explained.
+   */
+  const feesScreen = async (ctx: AuthContext, flash?: string, error?: string) => {
+    const opts = await fees.feeFormOptions(ctx, deps.db);
+    return av.feesPage({
+      periods: await fees.listFeePeriods(ctx, deps.db),
+      categories: opts.categories, years: opts.years, flash, error,
+    });
+  };
+
+  app.get('/admin/fees', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'fee.manage')) throw new Forbidden('fee.manage');
+    return html(await feesScreen(ctx));
+  });
+
+  app.post('/admin/fees', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'fee.manage')) throw new Forbidden('fee.manage');
+    const f = await c.req.parseBody();
+    const amount = parseMoney(String(f['amount'] ?? ''));
+    if (!amount.ok) return html(await feesScreen(ctx, undefined, amount.messageAr), 400);
+    try {
+      await fees.createFeePeriod(ctx, deps.db, {
+        nameAr: String(f['name'] ?? ''),
+        categoryId: String(f['category'] ?? '') as never,
+        fiscalPeriodId: String(f['year'] ?? '') as never,
+        startsOn: String(f['starts_on'] ?? ''),
+        endsOn: String(f['ends_on'] ?? ''),
+        dueOn: String(f['due_on'] ?? ''),
+        basis: String(f['basis'] ?? 'per_unit') === 'per_sqm' ? 'per_sqm' : 'per_unit',
+        amountPiastres: amount.value,
+      }, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await feesScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/fees', 303);
+  });
+
+  app.post('/admin/fees/:id/generate', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'fee.manage')) throw new Forbidden('fee.manage');
+    try {
+      const out = await fees.generateDues(ctx, deps.db, c.req.param('id') as never, deps.now);
+      return html(await feesScreen(ctx, _layout.msg(_t.fees.generated, {
+        n: out.billed, total: _layout.money(out.totalPiastres),
+      })));
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await feesScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+  });
+
+  app.post('/admin/fees/:id/publish', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'fee.manage')) throw new Forbidden('fee.manage');
+    try {
+      await fees.publishFeePeriod(ctx, deps.db, c.req.param('id') as never, deps.now);
+      return html(await feesScreen(ctx, _t.fees.publishedOk));
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await feesScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+  });
+
+  const duesScreen = async (ctx: AuthContext, id: string, flash?: string, error?: string) => {
+    const periods = await fees.listFeePeriods(ctx, deps.db);
+    const period = periods.find(p => p.id === id);
+    if (!period) throw new data.NotFound('الاشتراك ده مش موجود');
+    return av.feeDuesPage({
+      period, dues: await fees.listDues(ctx, deps.db, id as never), flash, error,
+    });
+  };
+
+  app.get('/admin/fees/:id', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'fee.manage')) throw new Forbidden('fee.manage');
+    return html(await duesScreen(ctx, c.req.param('id')));
+  });
+
+  app.post('/admin/fees/:id/dues/:dueId/waive', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'fee.manage')) throw new Forbidden('fee.manage');
+    const id = c.req.param('id');
+    const f = await c.req.parseBody();
+    const amount = parseMoney(String(f['amount'] ?? ''));
+    if (!amount.ok) return html(await duesScreen(ctx, id, undefined, amount.messageAr), 400);
+    try {
+      await fees.waiveDue(ctx, deps.db, c.req.param('dueId') as never,
+        amount.value, String(f['reason'] ?? ''), deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await duesScreen(ctx, id, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect(`/admin/fees/${id}`, 303);
+  });
+
+  /* ---- categories -------------------------------------------------------- */
+
+  const categoriesScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
+    av.categoriesPage({
+      categories: await adm.listCategories(ctx, deps.db),
+      accounts: await adm.accountChoices(ctx, deps.db),
+      flash, error,
+    });
+
+  app.get('/admin/categories', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'category.manage')) throw new Forbidden('category.manage');
+    return html(await categoriesScreen(ctx));
+  });
+
+  app.post('/admin/categories', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'category.manage')) throw new Forbidden('category.manage');
+    const f = await c.req.parseBody();
+    const kind = String(f['kind'] ?? 'operating_income');
+    try {
+      await mutations.createCategory(ctx, deps.db, {
+        nameAr: String(f['name'] ?? ''),
+        // The pairing is derived, not asked: `direction` and `kind` are two
+        // views of one fact, and `CHECK ((direction='expense') = (kind='expense'))`
+        // refuses any other combination. Asking twice invites disagreement.
+        direction: kind === 'expense' ? 'expense' : 'income',
+        kind,
+        ledgerAccountId: String(f['account'] ?? '') as never,
+        icon: String(f['icon'] ?? '') || null,
+      });
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await categoriesScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/categories', 303);
+  });
+
+  app.post('/admin/categories/:id/active', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'category.manage')) throw new Forbidden('category.manage');
+    const f = await c.req.parseBody();
+    const on = String(f['active']) === '1';
+    try {
+      if (on) await mutations.activateCategory(ctx, deps.db, c.req.param('id') as never);
+      else await mutations.deactivateCategory(ctx, deps.db, c.req.param('id') as never);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await categoriesScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/categories', 303);
+  });
+
+  /* ---- roles ------------------------------------------------------------- */
+
+  const usersScreen = async (ctx: AuthContext, q: string, flash?: string, error?: string) =>
+    av.usersPage({
+      people: await adm.listPeople(ctx, deps.db, q),
+      me: ctx.personId,
+      canAssignAdmin: can(ctx.role, 'user.assign_admin_role'),
+      q, flash, error,
+    });
+
+  app.get('/admin/users', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.assign_role')) throw new Forbidden('user.assign_role');
+    return html(await usersScreen(ctx, c.req.query('q') ?? ''));
+  });
+
+  app.post('/admin/users/:id/role', async c => {
+    const ctx = need(c);
+    const f = await c.req.parseBody();
+    try {
+      await mutations.assignRole(ctx, deps.db, c.req.param('id') as never,
+        String(f['role'] ?? 'resident') as never);
+    } catch (e) {
+      if (e instanceof Forbidden) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 403);
+      if (e instanceof LedgerRefused) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/users', 303);
+  });
+
+  app.post('/admin/users/:id/active', async c => {
+    const ctx = need(c);
+    const f = await c.req.parseBody();
+    try {
+      await mutations.setPersonActive(ctx, deps.db, c.req.param('id') as never,
+        String(f['active']) === '1', deps.now);
+    } catch (e) {
+      if (e instanceof Forbidden) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 403);
+      if (e instanceof LedgerRefused) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/users', 303);
+  });
+
+  /* ---- settings ---------------------------------------------------------- */
+
+  const settingsScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
+    av.settingsPage({ s: await adm.getSettings(ctx, deps.db), flash, error });
+
+  app.get('/admin/settings', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'settings.edit')) throw new Forbidden('settings.edit');
+    return html(await settingsScreen(ctx));
+  });
+
+  app.post('/admin/settings', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'settings.edit')) throw new Forbidden('settings.edit');
+    const f = await c.req.parseBody();
+    const threshold = parseMoney(String(f['threshold'] ?? ''));
+    if (!threshold.ok) return html(await settingsScreen(ctx, undefined, threshold.messageAr), 400);
+    try {
+      await mutations.updateSettings(ctx, deps.db, {
+        community_name_ar: String(f['community_name_ar'] ?? '').trim(),
+        instapay_handle: String(f['instapay_handle'] ?? '').trim(),
+        bank_name_ar: String(f['bank_name_ar'] ?? '').trim(),
+        bank_account_no: String(f['bank_account_no'] ?? '').trim(),
+        vodafone_cash_no: String(f['vodafone_cash_no'] ?? '').trim(),
+        countersign_threshold_piastres: threshold.value,
+        notify_quiet_from: String(f['quiet_from'] ?? '22:00'),
+        notify_quiet_to: String(f['quiet_to'] ?? '09:00'),
+        // An unchecked checkbox sends NOTHING. Reading it as "absent means
+        // leave alone" would make the two publication switches impossible to
+        // turn off from the form that turns them on.
+        unit_status_public: f['unit_status_public'] === '1' ? 1 : 0,
+        staff_names_public: f['staff_names_public'] === '1' ? 1 : 0,
+      }, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await settingsScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return html(await settingsScreen(ctx, _t.settings.saved));
+  });
+
+  /* ---- staff ------------------------------------------------------------- */
+
+  const staffScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
+    av.staffPage({
+      staff: await adm.listStaffFull(ctx, deps.db),
+      canEdit: can(ctx.role, 'settings.edit'),
+      flash, error,
+    });
+
+  app.get('/admin/staff', async c => {
+    const ctx = need(c);
+    // `staff.read_salaries` is held by RESIDENTS — the payroll total is
+    // published on purpose (transparency). This screen shows the NAMES and the
+    // edit controls, so it is gated on `staff.read_names`, which residents do
+    // not hold and the board and the finance reviewer do.
+    if (!can(ctx.role, 'staff.read_names')) throw new Forbidden('staff.read_names');
+    return html(await staffScreen(ctx));
+  });
+
+  app.post('/admin/staff', async c => {
+    const ctx = need(c);
+    const f = await c.req.parseBody();
+    const salary = parseMoney(String(f['salary'] ?? ''));
+    if (!salary.ok) return html(await staffScreen(ctx, undefined, salary.messageAr), 400);
+    try {
+      await mutations.addStaff(ctx, deps.db, {
+        fullName: String(f['name'] ?? ''),
+        jobTitleAr: String(f['job'] ?? ''),
+        monthlySalaryPiastres: salary.value,
+        startedOn: String(f['started_on'] ?? '') || null,
+      });
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await staffScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/staff', 303);
+  });
+
+  app.post('/admin/staff/:id/end', async c => {
+    const ctx = need(c);
+    const f = await c.req.parseBody();
+    try {
+      await mutations.endStaff(ctx, deps.db, c.req.param('id') as never, String(f['ended_on'] ?? ''));
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await staffScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/staff', 303);
+  });
+
+  /* ---- audit ------------------------------------------------------------- */
+
+  app.get('/admin/audit', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'audit.read')) throw new Forbidden('audit.read');
+    return html(av.auditPage({ rows: await adm.auditFeed(ctx, deps.db) }));
   });
 
   /* ---- annual statement (CP-7) ------------------------------------------ */

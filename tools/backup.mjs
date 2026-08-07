@@ -160,6 +160,23 @@ export function buildBackupSql(db) {
         P(`${verb} ${table} (${cols.join(',')}) VALUES (${vals.join(',')});`);
         rowCount++;
       }
+    } else if (table === 'fee_periods') {
+      // Same shape of problem, found by the drill rather than by reasoning:
+      // `trg_dues_no_insert_after_publish` refuses a `unit_dues` row against a
+      // PUBLISHED period, because a published amount is what a resident was
+      // told they owe. A backup that emitted the period already published
+      // could therefore never replay its own dues.
+      //
+      // Inserted as drafts; `is_published` reapplied at the end, in the same
+      // phase as the period statuses. This is the general lesson of CP-8: every
+      // control that makes a state immutable also makes it un-restorable unless
+      // the backup replays the transition that created it.
+      P(`--   ↑ inserted as DRAFTS; is_published reapplied after the dues are in`);
+      for (const r of rows) {
+        const vals = cols.map(c => (c === 'is_published' ? '0' : lit(r[c])));
+        P(`${verb} ${table} (${cols.join(',')}) VALUES (${vals.join(',')});`);
+        rowCount++;
+      }
     } else {
       for (const r of rows) {
         P(`${verb} ${table} (${cols.join(',')}) VALUES (${cols.map(c => lit(r[c])).join(',')});`);
@@ -206,6 +223,19 @@ export function buildBackupSql(db) {
       + `posted_at=${lit(e.posted_at)} WHERE id=${lit(e.id)};`);
   }
   P('');
+
+  // ---- republish the fee periods -------------------------------------------
+  // Every flat is billed by now, so `trg_fee_period_publish_needs_dues` passes
+  // — and it would NOT have passed before the dues were replayed, which is the
+  // point of doing it here rather than at insert time.
+  const fees = db.prepare(`SELECT id FROM fee_periods WHERE is_published = 1`).all();
+  if (fees.length > 0) {
+    P('-- fee periods republished, now that every flat has its due back');
+    for (const f of fees) {
+      P(`UPDATE fee_periods SET is_published=1 WHERE id=${lit(f.id)};`);
+    }
+    P('');
+  }
 
   // ---- reapply the real period statuses ------------------------------------
   const periods = db.prepare(`SELECT id, status FROM fiscal_periods WHERE status <> 'open'`).all();

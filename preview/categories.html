@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>الأرشيف — بوابة قرية الأطباء</title>
+<title>بنود الإيرادات والمصروفات — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -298,13 +298,13 @@ header .htext{flex:1;min-inline-size:0}
   <div class="hctl">
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/categories">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="/news/archive">
+      <input type="hidden" name="next" value="/admin/categories">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -313,10 +313,10 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
   <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
   <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
-  <a href="/news" aria-current="page"><span class="ico" aria-hidden="true">📰</span>أخبار</a>
+  <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
 </nav>
 <a class="fab" href="/help">💬 محتاج مساعدة؟</a>
@@ -325,68 +325,415 @@ header .htext{flex:1;min-inline-size:0}
 
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
-<a class="backlink" href="/news">→ رجوع للأخبار</a>
 <div class="card">
-  <h2 style="margin-block-start:0">الأرشيف</h2>
-  <p class="muted">كل حاجة اتنشرت من أول يوم، مترتبة بالسنة والشهر.</p>
+  <h2 style="margin-block-start:0">بنود الإيرادات والمصروفات</h2>
+  <p class="muted">البنود اللي بيتسجّل عليها كل جنيه داخل أو خارج</p>
+  
+  
+  <p class="hint">قفل البند بيخفيه من الفورمات بس. كل العمليات القديمة بتفضل عليه زي ما هي.</p>
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2026</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2026/07">
-      يوليو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/06">
-      يونيو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/04">
-      أبريل
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/02">
-      فبراير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2026/01">
-      يناير
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-  </div>
+  <h3 style="margin-block-start:0">➕ بند جديد</h3>
+  <form method="post" action="/admin/categories">
+    <div class="field">
+      <label for="cname">اسم البند</label>
+      <input id="cname" name="name" required>
+    </div>
+    <div class="field">
+      <label for="ckind">التصنيف</label>
+      <select id="ckind" name="kind" required>
+        <option value="operating_income">اشتراك أو إيراد تشغيلي</option>
+        <option value="deposit">وديعة (أمانة بتترد للمالك)</option>
+        <option value="contribution">مساهمة</option>
+        <option value="penalty">غرامة</option>
+        <option value="expense">مصروف</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="cacc">الحساب في الدفاتر</label>
+      <select id="cacc" name="account" required aria-describedby="cacc-hint">
+        <option value="ACC00000000000000000002101">2101 — ودائع مستردة</option><option value="ACC00000000000000000002102">2102 — أرصدة دائنة للملاك</option><option value="ACC00000000000000000002103">2103 — مستحقات موردين</option><option value="ACC00000000000000000004101">4101 — اشتراك الصيانة السنوي</option><option value="ACC00000000000000000004102">4102 — مساهمات خاصة</option><option value="ACC00000000000000000004103">4103 — غرامات تأخير</option><option value="ACC00000000000000000004199">4199 — إيرادات أخرى</option><option value="ACC00000000000000000005101">5101 — مصروفات — الصيانة</option><option value="ACC00000000000000000005201">5201 — مصروفات — المياه</option><option value="ACC00000000000000000005301">5301 — مصروفات — مرتبات العمالة</option><option value="ACC00000000000000000005401">5401 — مصروفات — الأمن والحراسة</option><option value="ACC00000000000000000005501">5501 — مصروفات — النظافة ورفع المخلفات</option><option value="ACC00000000000000000005601">5601 — مصروفات — المساحات الخضراء</option><option value="ACC00000000000000000005701">5701 — مصروفات — حمام السباحة</option><option value="ACC00000000000000000005801">5801 — مصروفات — الكهرباء (عداد عام)</option><option value="ACC00000000000000000005901">5901 — مصروفات — إدارية ورسوم حكومية</option><option value="ACC00000000000000000005902">5902 — مصروفات — مصاريف بنكية</option><option value="ACC00000000000000000005951">5951 — مصروفات — الطوارئ</option><option value="ACC00000000000000000005999">5999 — مصروفات — أخرى</option>
+      </select>
+      <p class="hint" id="cacc-hint">الوديعة لازم تتربط بحساب التزام — مش إيراد. ده اللي بيمنع إن أمانة الملاك تتحسب فلوس القرية.</p>
+    </div>
+    <div class="field">
+      <label for="cicon">أيقونة</label>
+      <input id="cicon" name="icon" maxlength="4" placeholder="🔧">
+    </div>
+    <button class="btn" type="submit">ضيف البند</button>
+  </form>
 </div>
+
 <div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2025</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2025/11">
-      نوفمبر
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2025/05">
-      مايو
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
+  
+  <div class="row">
+    <span class="ico" aria-hidden="true">wrench</span>
+    <span class="row-body">
+      <b>الصيانة</b>
+      <span class="muted">مصروف
+        · 5101 مصروفات — الصيانة
+        · 3 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX01/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
   </div>
-</div>
-<div class="card">
-  <h3 style="margin-block-start:0"><bdi dir="ltr" class="num">2024</bdi></h3>
-  <div class="chipgrid">
-    
-    <a class="chiplink" href="/news/archive/2024/08">
-      أغسطس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
-    <a class="chiplink" href="/news/archive/2024/03">
-      مارس
-      <span class="count"><bdi dir="ltr" class="num">1</bdi></span>
-    </a>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>لمبات وإضاءة</b>
+      <span class="muted">مصروف
+        · 5101 مصروفات — الصيانة
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E101/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>أعمال كهربائية — مفاتيح ومواتير</b>
+      <span class="muted">مصروف
+        · 5101 مصروفات — الصيانة
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E102/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>سباكة</b>
+      <span class="muted">مصروف
+        · 5101 مصروفات — الصيانة
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E103/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>دهانات وترميم</b>
+      <span class="muted">مصروف
+        · 5101 مصروفات — الصيانة
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E104/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>مصاعد</b>
+      <span class="muted">مصروف
+        · 5101 مصروفات — الصيانة
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E105/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">droplets</span>
+    <span class="row-body">
+      <b>المياه</b>
+      <span class="muted">مصروف
+        · 5201 مصروفات — المياه
+        · 3 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX02/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>عربات مياه حلوة</b>
+      <span class="muted">مصروف
+        · 5201 مصروفات — المياه
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E201/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">💸</span>
+    <span class="row-body">
+      <b>مياه استخدام</b>
+      <span class="muted">مصروف
+        · 5201 مصروفات — المياه
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000E202/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">users</span>
+    <span class="row-body">
+      <b>مرتبات العمالة</b>
+      <span class="muted">مصروف
+        · 5301 مصروفات — مرتبات العمالة
+        · 7 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX03/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">shield</span>
+    <span class="row-body">
+      <b>الأمن والحراسة</b>
+      <span class="muted">مصروف
+        · 5401 مصروفات — الأمن والحراسة
+        · 7 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX04/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">trash-2</span>
+    <span class="row-body">
+      <b>النظافة ورفع المخلفات</b>
+      <span class="muted">مصروف
+        · 5501 مصروفات — النظافة ورفع المخلفات
+        · 3 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX05/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">trees</span>
+    <span class="row-body">
+      <b>المساحات الخضراء والزراعة</b>
+      <span class="muted">مصروف
+        · 5601 مصروفات — المساحات الخضراء
+        · 1 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX06/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">waves</span>
+    <span class="row-body">
+      <b>حمام السباحة</b>
+      <span class="muted">مصروف
+        · 5701 مصروفات — حمام السباحة
+        · 2 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX07/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">zap</span>
+    <span class="row-body">
+      <b>الكهرباء (عداد عام)</b>
+      <span class="muted">مصروف
+        · 5801 مصروفات — الكهرباء (عداد عام)
+        · 3 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX08/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">file-text</span>
+    <span class="row-body">
+      <b>مصروفات إدارية ورسوم حكومية</b>
+      <span class="muted">مصروف
+        · 5901 مصروفات — إدارية ورسوم حكومية
+        · 1 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX09/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">siren</span>
+    <span class="row-body">
+      <b>الطوارئ</b>
+      <span class="muted">مصروف
+        · 5951 مصروفات — الطوارئ
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX10/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">circle-ellipsis</span>
+    <span class="row-body">
+      <b>أخرى</b>
+      <span class="muted">مصروف
+        · 5999 مصروفات — أخرى
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000EX99/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">receipt</span>
+    <span class="row-body">
+      <b>اشتراك الصيانة السنوي</b>
+      <span class="muted">إيراد
+        · 4101 اشتراك الصيانة السنوي
+        · 188 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000IN01/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">lock</span>
+    <span class="row-body">
+      <b>وديعة</b>
+      <span class="muted">إيراد
+        · 2101 ودائع مستردة
+        · 55 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000IN02/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">hand-coins</span>
+    <span class="row-body">
+      <b>مساهمات خاصة</b>
+      <span class="muted">إيراد
+        · 4102 مساهمات خاصة
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000IN03/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">alarm-clock</span>
+    <span class="row-body">
+      <b>غرامات تأخير</b>
+      <span class="muted">إيراد
+        · 4103 غرامات تأخير
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000IN04/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">circle-ellipsis</span>
+    <span class="row-body">
+      <b>إيرادات أخرى</b>
+      <span class="muted">إيراد
+        · 4199 إيرادات أخرى
+        · 0 عملية</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/categories/CAT0000000000000000000IN99/active" class="inline-form">
+        <input type="hidden" name="active" value="0">
+        <button class="btn btn-2 btn-sm" type="submit">اقفل البند</button>
+      </form>
+    </span>
   </div>
 </div>
 </main>

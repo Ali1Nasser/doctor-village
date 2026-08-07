@@ -883,7 +883,7 @@ INSERT INTO delegate_authorizations (id, owner_profile_id, delegate_profile_id, 
 
 -- ---------------------------------------------------- fiscal & fees ---
 INSERT INTO fiscal_periods (id, name_ar, starts_on, ends_on, status) VALUES ('DEMOFPR0000000000000000001','السنة المالية 2026','2026-01-01','2026-12-31','open');
-INSERT INTO fee_periods (id, name_ar, category_id, fiscal_period_id, starts_on, ends_on, due_on, basis, amount_piastres, is_published, created_by) VALUES ('DEMOFEE0000000000000000001','اشتراك الصيانة السنوي 2026','CAT0000000000000000000IN01','DEMOFPR0000000000000000001','2026-01-01','2026-12-31','2026-03-31','per_unit',600000,1,'DEMOPRF0000000000000000002');
+INSERT INTO fee_periods (id, name_ar, category_id, fiscal_period_id, starts_on, ends_on, due_on, basis, amount_piastres, is_published, created_by) VALUES ('DEMOFEE0000000000000000001','اشتراك الصيانة السنوي 2026','CAT0000000000000000000IN01','DEMOFPR0000000000000000001','2026-01-01','2026-12-31','2026-03-31','per_unit',600000,0,'DEMOPRF0000000000000000002');
 
 -- dues — one per unit, frozen at generation
 INSERT INTO unit_dues (id, fee_period_id, unit_id, amount_piastres) VALUES ('DEMODUE0000000000000000001','DEMOFEE0000000000000000001','DEMOUNT0000000000000000001',600000);
@@ -1092,3 +1092,6 @@ INSERT INTO unit_dues (id, fee_period_id, unit_id, amount_piastres) VALUES ('DEM
 INSERT INTO unit_dues (id, fee_period_id, unit_id, amount_piastres) VALUES ('DEMODUE0000000000000000204','DEMOFEE0000000000000000001','DEMOUNT0000000000000000204',600000);
 UPDATE unit_dues SET waived_piastres=600000, waiver_reason_ar='إعفاء بقرار مجلس — ظروف اجتماعية', waived_by='DEMOPRF0000000000000000002', waived_at='2026-04-02T11:00:00Z' WHERE id='DEMODUE0000000000000000017';
 UPDATE unit_dues SET waived_piastres=600000, waiver_reason_ar='إعفاء بقرار مجلس — ظروف اجتماعية', waived_by='DEMOPRF0000000000000000002', waived_at='2026-04-02T11:00:00Z' WHERE id='DEMODUE0000000000000000088';
+
+-- ...and only now is it published, once every flat has been billed
+UPDATE fee_periods SET is_published=1 WHERE id='DEMOFEE0000000000000000001';
