@@ -66,11 +66,25 @@ CREATE INDEX idx_profiles_role ON profiles(role) WHERE is_active = 1;
 CREATE TABLE phone_identifiers (
   id               TEXT    PRIMARY KEY NOT NULL CHECK (length(id) = 26),
   profile_id       TEXT    NOT NULL REFERENCES profiles(id),
-  -- E.164 Egypt, enforced structurally. SQLite has no regex, so GLOB + length.
+  -- E.164 Egypt, enforced structurally. SQLite has no regex, so length + GLOB.
   -- The normalizer lives in lib/db/; this CHECK exists so a malformed number
   -- FAILS LOUDLY at the boundary instead of being silently normalized wrong.
+  --
+  -- ⚠️ Written as a NEGATIVE match on purpose. The obvious form —
+  --     GLOB '+20[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+  -- has thirteen character classes, and **real D1 refuses to evaluate it**:
+  --     "LIKE or GLOB pattern too complex: SQLITE_ERROR"
+  -- Local SQLite (3.45 and 3.51) evaluates it happily, so every test passed and
+  -- the failure appeared only on the first INSERT against a deployed database.
+  -- Measured 2026-08-07: ten classes are accepted, thirteen are not.
+  --
+  -- `NOT x GLOB '*[^0-9]*'` uses ONE class and says the same thing — "there is
+  -- no non-digit anywhere in the rest of the string" — so the constraint is
+  -- exactly as strict and portable. This is A-05 / R-031, found by deploying.
   phone_e164       TEXT    NOT NULL
-                           CHECK (phone_e164 GLOB '+20[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'),
+                           CHECK (length(phone_e164) = 13
+                              AND substr(phone_e164, 1, 3) = '+20'
+                              AND NOT substr(phone_e164, 4) GLOB '*[^0-9]*'),
   is_primary       INTEGER NOT NULL DEFAULT 1 CHECK (is_primary IN (0,1)),
   status           TEXT    NOT NULL DEFAULT 'active'
                            CHECK (status IN ('active','replaced','revoked')),

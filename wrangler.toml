@@ -22,10 +22,10 @@ account_id = "1ca337dfa2c4b572409e393e577c3bc5"
 # after residents enrol invalidates EVERY passkey in the village and forces
 # assisted recovery for all of them. Decide the final domain BEFORE resident #1.
 [vars]
-WEBAUTHN_RP_ID   = "qaryat-atebaa.pages.dev"
+WEBAUTHN_RP_ID   = "qaryat-atebaa.qaryat-atebaa-portal.workers.dev"
 WEBAUTHN_RP_NAME = "بوابة قرية الأطباء"
-WEBAUTHN_ORIGIN  = "https://qaryat-atebaa.pages.dev"
-APP_ENV          = "production"
+WEBAUTHN_ORIGIN  = "https://qaryat-atebaa.qaryat-atebaa-portal.workers.dev"
+APP_ENV          = "demo"
 
 # --- database ------------------------------------------------------------
 # Free tier, verified 2026-08-04: 500 MB per database, 10 databases, 5M reads
@@ -33,7 +33,7 @@ APP_ENV          = "production"
 [[d1_databases]]
 binding       = "DB"
 database_name = "qaryat-atebaa"
-database_id   = "d3b9e10e-1129-4fd8-9dd7-ebe9b0acc260"  # created 2026-08-07, EEUR
+database_id   = "c4abaed6-ddcc-4a42-b733-ccdbaf45a1dd"  # created 2026-08-07, EEUR
 migrations_dir = "migrations"
 
 # ⚠️ Receipt images live in a SEPARATE database (ADR-023). Not for tidiness: if
@@ -43,16 +43,13 @@ migrations_dir = "migrations"
 [[d1_databases]]
 binding       = "RECEIPTS"
 database_name = "qaryat-atebaa-receipts"
-database_id   = "TODO(owner-input): `wrangler d1 create qaryat-atebaa-receipts`"
+database_id   = "00e3fb16-5196-4450-9237-c78a12bcb803"  # created 2026-08-07, EEUR
 
 # --- KV ------------------------------------------------------------------
 # Read-mostly cache ONLY. KV allows 1,000 writes/day against D1's 100,000, so
 # anything an UNAUTHENTICATED caller can trigger a write to lives in D1 —
 # sessions, WebAuthn challenges, rate limits (ADR-017). One attacker hammering
 # /login must not be able to exhaust the day's budget for the whole village.
-[[kv_namespaces]]
-binding = "CACHE"
-id      = "TODO(owner-input): fill from `wrangler kv namespace create CACHE`"
 
 # --- object storage ------------------------------------------------------
 # ⛔ NO [[r2_buckets]] BLOCK, DELIBERATELY. Cloudflare's own R2 docs require
