@@ -122,11 +122,12 @@ before(async () => {
   operator = (await resolveAuthContext(db, 'tok-op', NOW))!;
 });
 
-const record = async (n: number, amount: number, fund: string, ctx = admin1) => {
+const record = async (n: number, amount: number, fund: string, ctx = admin1,
+                      spentOn = '2026-06-01') => {
   const eid = id('EXP', n) as Id;
   await mut.recordExpense(ctx, db, {
     id: eid, voucherNo: `E-2026-0000${n}`, categoryId: C_MAINT as Id,
-    amountPiastres: amount, spentOn: '2026-06-01', descriptionAr: `مصروف ${n}`,
+    amountPiastres: amount, spentOn, descriptionAr: `مصروف ${n}`,
     vendorName: 'مورد', invoiceStorageKey: null, fundId: fund as Id,
   } as never);
   return eid;
@@ -307,19 +308,38 @@ describe('⭐ CP-5 GATE: the fund split holds, checked on the RENDERED page', ()
 /* ================================================================== */
 describe('a closed fiscal period takes no more entries', () => {
 
+  /**
+   * This block runs on its OWN fiscal period (2025), not the shared 2026 one.
+   *
+   * It used to close 2026 in place, which stopped working when migration 0021
+   * added `trg_period_close_needs_clean_expenses`: by the time this block runs,
+   * earlier blocks have deliberately left unposted expenses in 2026 — the
+   * fixtures that "money spent but not yet in the books is visible" depends on
+   * — and a period cannot close over them. Both facts are correct and they are
+   * simply about different years, so the fix is to stop sharing one.
+   */
+  const PERIOD25 = id('FPR', 25);
+
   it('posting into a closed year is refused', async () => {
-    await record(4, 12_000, OP_FUND);
+    raw.prepare(`INSERT INTO fiscal_periods (id,name_ar,starts_on,ends_on,status)
+                 VALUES (?,'2025','2025-01-01','2025-12-31','open')`).run(PERIOD25);
+    // A clean year closes without argument.
     raw.prepare(`UPDATE fiscal_periods SET status='closed', closed_by=?, closed_at=? WHERE id=?`)
-      .run(A1, '2026-08-05T09:00:00Z', PERIOD);
+      .run(A1, '2026-08-05T09:00:00Z', PERIOD25);
+    // …and a late expense dated inside it can still be RECORDED. Only posting
+    // is refused, which is precisely the control under test.
+    await record(4, 12_000, OP_FUND, admin1, '2025-06-01');
     await assert.rejects(() => exp.postExpense(admin2, db,
-      { expenseId: id('EXP', 4) as Id, creditAccountId: A_BANK, periodId: PERIOD as Id }, NOW),
+      { expenseId: id('EXP', 4) as Id, creditAccountId: A_BANK, periodId: PERIOD25 as Id }, NOW),
       /مقفولة/, 'an expense posted into a closed fiscal period');
-    raw.prepare(`UPDATE fiscal_periods SET status='open' WHERE id=?`).run(PERIOD);
   });
 
   it('...and posts once it is reopened', async () => {
+    raw.prepare(`UPDATE fiscal_periods SET status='reopened', reopened_by=?, reopened_at=?,
+                   reopen_reason_ar=? WHERE id=?`)
+      .run(A2, '2026-08-05T10:00:00Z', 'ظهر مصروف متأخر', PERIOD25);
     const entryId = await exp.postExpense(admin2, db,
-      { expenseId: id('EXP', 4) as Id, creditAccountId: A_BANK, periodId: PERIOD as Id }, NOW);
+      { expenseId: id('EXP', 4) as Id, creditAccountId: A_BANK, periodId: PERIOD25 as Id }, NOW);
     assert.ok(entryId);
   });
 });

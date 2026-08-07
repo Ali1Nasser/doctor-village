@@ -22,7 +22,13 @@ INSERT INTO accounts (id, code, name_ar, type, normal_balance, sort_order) VALUE
  ('ACC00000000000000000001104','1104','محفظة فودافون كاش',      'asset','debit',40),
  -- 13xx = receivables. v_community_totals EXCLUDES 13% from spendable cash,
  -- because money owed to us is not money we can spend.
- ('ACC00000000000000000001301','1301','مستحقات على الملاك',     'asset','debit',50);
+ ('ACC00000000000000000001301','1301','مستحقات على الملاك',     'asset','debit',50),
+ -- 1901 = suspense. Money the bank statement shows and the books cannot yet
+ -- explain lands here rather than being guessed into a category — an
+ -- unexplained 3,200 ج.م filed as "maintenance" can never be traced back.
+ -- `v_suspense_balance` puts the total on /admin/health so clearing it is
+ -- visibly someone's job. A balance that only ever grows is the warning.
+ ('ACC00000000000000000001901','1901','حساب تسوية مؤقت',         'asset','debit',90);
 
 -- ----------------------------------------------------------- LIABILITIES 2xxx
 -- ⭐ الوديعة lives HERE, never in 4xxx. R-020. The categories table cannot map
@@ -57,6 +63,7 @@ INSERT INTO accounts (id, code, name_ar, type, normal_balance, sort_order) VALUE
  ('ACC00000000000000000005801','5801','مصروفات — الكهرباء (عداد عام)',  'expense','debit',80),
  ('ACC00000000000000000005901','5901','مصروفات — إدارية ورسوم حكومية',  'expense','debit',90),
  ('ACC00000000000000000005951','5951','مصروفات — الطوارئ',              'expense','debit',95),
+ ('ACC00000000000000000005902','5902','مصروفات — مصاريف بنكية', 'expense','debit',925),
  ('ACC00000000000000000005999','5999','مصروفات — أخرى',                 'expense','debit',99);
 
 -- --------------------------------------------------------------------- FUNDS
