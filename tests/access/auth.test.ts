@@ -22,6 +22,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { NodeSqliteDb } from '../../lib/db/driver.js';
+import { stripImageMetadata } from '../../lib/storage/image.js';
 import { setTokenHasher, resolveAuthContext } from '../../lib/db/index.js';
 import * as adb from '../../lib/db/auth.js';
 import * as passkey from '../../lib/auth/passkey.js';
@@ -38,7 +39,18 @@ const P_ADMIN = id('PRF', 1), P_RES = id('PRF', 2), P_NEW = id('PRF', 3);
 const B1 = id('BLD', 1), U1 = id('UNT', 1);
 const RP = { id: 'localhost', name: 'قرية الأطباء', origin: 'http://localhost' };
 /** A tiny real WebP, shared by the upload and wizard suites. */
-const WEBP = Buffer.from('UklGRiIAAABXRUJQVlA4TBUAAAAvAAAAAAfQ//73v/+BiOh/AAA=', 'base64');
+/**
+ * A REAL 1×1 WebP, encoded by Chromium's canvas — the same path the upload
+ * island uses. The previous fixture was four bytes shorter than its own RIFF
+ * header declared, which nothing noticed until the server started parsing the
+ * container: a truncated file is now refused rather than stored as clean, and
+ * the fixture was truncated.
+ *
+ * It carries an ICCP colour-profile chunk, which is what makes it useful here
+ * — the upload path strips that chunk, so these tests exercise the rewrite
+ * branch rather than the "nothing to remove" one.
+ */
+const WEBP = Buffer.from('UklGRhwCAABXRUJQVlA4WAoAAAAgAAAAAAAAAAAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggLgAAAJABAJ0BKgEAAQABQCYloAJ0ugADmAD+8U2v4tpHQpkP/vGf/3Gf/3Gf/IgAAAA=', 'base64');
 const webpB64 = WEBP.toString('base64url');
 
 let raw: DatabaseSync;
@@ -323,11 +335,22 @@ describe('receipt upload', () => {
     assert.equal(file.status, 200);
     assert.equal(file.headers.get('content-type'), 'image/webp');
     const got = new Uint8Array(await file.arrayBuffer());
-    assert.deepEqual([...got], [...webp], 'the image came back altered');
+
+    // What comes back is the STRIPPED photo, not the uploaded one: the server
+    // removes the metadata containers before storing, so `exif_stripped` is a
+    // fact rather than the client's word for it. What must be byte-for-byte
+    // identical is what was stored versus what is served — the storage layer
+    // itself alters nothing.
+    const stored = stripImageMetadata(new Uint8Array(webp));
+    assert.deepEqual([...got], [...stored.bytes], 'the storage layer altered the image');
+    assert.ok(stored.removed.includes('ICCP'), 'the fixture had no chunk to strip');
+    assert.ok(!Buffer.from(got).includes(Buffer.from('ICCP', 'latin1')),
+      'a metadata chunk survived into storage');
+
     // and it is genuinely in D1, not in memory
     const blob = raw.prepare(`SELECT size_bytes FROM receipt_blobs WHERE storage_key=?`)
       .get(key) as { size_bytes: number };
-    assert.equal(blob.size_bytes, webp.byteLength);
+    assert.equal(blob.size_bytes, stored.bytes.byteLength);
   });
 
   it('a receipt image is STILL refused to another resident (C6 holds for D1 too)', async () => {

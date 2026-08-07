@@ -38,6 +38,7 @@ import * as statement from '../lib/db/statement.js';
 import * as cv from './views/content-pages.js';
 import { parseOwners, summaryAr } from '../lib/import/owners.js';
 import { StorageFull, assertRoomFor } from '../lib/storage/index.js';
+import { stripImageMetadata, UnsupportedImage } from '../lib/storage/image.js';
 import { t as _t } from './views/layout.js';
 import * as _layout from './views/layout.js';
 
@@ -124,6 +125,9 @@ export function createApp(deps: AppDeps) {
     if (err instanceof passkey.RateLimited) return c.json({ error: err.reasonAr }, 429);
     if (err instanceof passkey.AuthFailed) return c.json({ error: err.reasonAr }, 401);
     if (err instanceof StorageFull) return c.json({ error: err.reasonAr }, 507);
+    // 415: the photo is a format whose metadata layout is not understood, or it
+    // arrived damaged. Refusing beats storing it and claiming it was cleaned.
+    if (err instanceof UnsupportedImage) return c.json({ error: err.reasonAr }, 415);
     if (err instanceof Unauthorized) return c.json({ error: 'لازم تسجّل دخول الأول' }, 401);
     if (err instanceof Forbidden) return c.json({ error: err.reasonAr }, 403);
     if (err instanceof NotFound) return c.json({ error: err.reasonAr }, 404);
@@ -610,12 +614,21 @@ export function createApp(deps: AppDeps) {
     // The key is namespaced under the expense id, and `trg_expense_invoice_key_shape`
     // refuses a key that does not match its row — so `authorizeInvoiceRead` can
     // resolve by lookup instead of parsing a path.
-    const key = `invoices/${expenseId}/${data.newId('INV')}.webp`;
-    await deps.storagePut({ key, body: bytes, mime: 'image/webp', unitId: null });
+    // Same server-side strip as the receipt path. A supplier invoice photo
+    // carries the location it was taken in just as readily as a receipt does.
+    let clean;
+    try {
+      clean = stripImageMetadata(bytes);
+    } catch (err) {
+      if (err instanceof UnsupportedImage) return expenseScreen(c, undefined, err.reasonAr);
+      throw err;
+    }
+    const key = `invoices/${expenseId}/${data.newId('INV')}.${clean.mime.slice(6)}`;
+    await deps.storagePut({ key, body: clean.bytes, mime: clean.mime, unitId: null });
     await data.registerStorageObject(ctx, deps.db, {
       storageKey: key, bucket: 'invoices', ownerKind: 'expense_invoice',
-      ownerId: expenseId, unitId: null, sizeBytes: bytes.byteLength,
-      sha256: await sha256Bytes(bytes), mime: 'image/webp', exifStripped: true,
+      ownerId: expenseId, unitId: null, sizeBytes: clean.bytes.byteLength,
+      sha256: await sha256Bytes(clean.bytes), mime: clean.mime, exifStripped: true,
     });
     try {
       await expenses.attachInvoice(ctx, deps.db, expenseId as never, key, deps.now);
@@ -1073,15 +1086,30 @@ export function createApp(deps: AppDeps) {
       await assertRoomFor({ usedBytes: deps.storageUsedBytes } as never, bytes.byteLength, cap);
     }
 
-    const sha = await sha256Bytes(bytes);
+    // ⭐ The metadata is removed HERE, on the server, and `exifStripped` is set
+    // from what actually happened. It used to be hardcoded `true` beside a
+    // hardcoded `image/webp`, on bytes nothing had looked at: the browser did
+    // strip EXIF as a side effect of re-encoding through a canvas, which
+    // protects a resident using the site and nothing else. A request that
+    // skips the page — curl, JS off, a modified client — stored a photo
+    // carrying the GPS coordinates of a flat, with a column beside it saying
+    // otherwise. A control a client can decline is a claim.
+    //
+    // The hash is taken AFTER stripping, so duplicate detection compares the
+    // bytes that are actually stored. Hashing before would let the same
+    // receipt, re-uploaded from a different phone with different EXIF, count
+    // as a new payment.
+    const clean = stripImageMetadata(bytes);
+    const sha = await sha256Bytes(clean.bytes);
     const dup = await data.findDuplicateReceipt(ctx, deps.db, sha, b.amountPiastres, b.transferDate);
 
     const id = data.newId('PAY');
-    const key = `receipts/${b.unitId}/${id}.webp`;
-    await deps.storagePut({ key, body: bytes, mime: 'image/webp', unitId: b.unitId });
+    const ext = clean.mime.slice('image/'.length);
+    const key = `receipts/${b.unitId}/${id}.${ext}`;
+    await deps.storagePut({ key, body: clean.bytes, mime: clean.mime, unitId: b.unitId });
     await data.registerStorageObject(ctx, deps.db, {
       storageKey: key, bucket: 'receipts', ownerKind: 'payment_receipt', ownerId: id,
-      unitId: b.unitId, sizeBytes: bytes.byteLength, sha256: sha, mime: 'image/webp',
+      unitId: b.unitId, sizeBytes: clean.bytes.byteLength, sha256: sha, mime: clean.mime,
       exifStripped: true,
     });
     await data.createPayment(ctx, deps.db, {
