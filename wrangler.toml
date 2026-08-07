@@ -33,7 +33,7 @@ APP_ENV          = "production"
 [[d1_databases]]
 binding       = "DB"
 database_name = "qaryat-atebaa"
-database_id   = "TODO(owner-input): fill from `wrangler d1 create qaryat-atebaa`"
+database_id   = "d3b9e10e-1129-4fd8-9dd7-ebe9b0acc260"  # created 2026-08-07, EEUR
 migrations_dir = "migrations"
 
 # ⚠️ Receipt images live in a SEPARATE database (ADR-023). Not for tidiness: if
