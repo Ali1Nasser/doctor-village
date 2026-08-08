@@ -172,17 +172,47 @@ describe('challenges and activation links are single-use', () => {
     clock = '2026-08-04T10:00:00Z';
   });
 
-  it('an activation link works exactly once', async () => {
+  /**
+   * ⭐ The bug the board reported: "it opens when I click it here, but when I
+   * send it on WhatsApp it says the link was already used."
+   *
+   * The GET used to burn the token, which made the link single-FETCH rather
+   * than single-USE — and a URL is fetched by far more than its recipient.
+   * Pasting one into WhatsApp makes Meta's crawler open it to build the preview
+   * card; browser prefetch and antivirus scanners do the same. By the time the
+   * resident tapped, it was spent.
+   *
+   * Five GETs stand in for those crawlers. The token has to survive all of them.
+   */
+  it('⭐ a link survives every preview crawler that opens it, and dies on the press', async () => {
     const token = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(token),
       'first_activation', NOW);
 
-    const first = await app.request(`/login/activate?t=${token}`);
-    assert.equal(first.status, 200);
-    assert.match(await first.text(), /ساكن جديد/, 'the activation page should greet by name');
+    for (let i = 0; i < 5; i++) {
+      const peek = await app.request(`/login/activate?t=${token}`);
+      assert.equal(peek.status, 200, `fetch ${i + 1} did not survive`);
+      const body = await peek.text();
+      assert.match(body, /action="\/login\/activate"/, 'there is no button to press');
+      // Nothing is spent, so nothing is handed out either.
+      assert.equal(peek.headers.get('set-cookie'), null,
+        'a preview crawler was handed a live session cookie');
+      // …and the page carries no personal detail, because whatever it renders
+      // is disclosed to whichever service the link was pasted into.
+      assert.ok(!body.includes('ساكن جديد'), 'the crawler was shown the resident by name');
+      assert.match(body, /noindex/, 'the activation page is indexable');
+    }
 
-    const second = await app.request(`/login/activate?t=${token}`);
-    assert.equal(second.status, 410, 'a forwarded activation link opened a second session');
+    const done = await activate(token);
+    assert.equal(done.status, 200);
+    assert.match(await done.text(), /ساكن جديد/, 'the activation page should greet by name');
+    assert.match(done.headers.get('set-cookie') ?? '', /qa_session=/);
+
+    // …and NOW it is spent, for the GET and the POST alike.
+    assert.equal((await activate(token)).status, 410,
+      'a forwarded activation link opened a second session');
+    assert.equal((await app.request(`/login/activate?t=${token}`)).status, 410,
+      'a spent link still renders the button');
   });
 
   it('issuing a new link invalidates the previous one', async () => {
@@ -202,6 +232,18 @@ describe('challenges and activation links are single-use', () => {
   });
 });
 
+/**
+ * Complete an activation the way a resident does: open the link, then press
+ * the button. The GET deliberately spends nothing (a WhatsApp preview crawler
+ * fetches it), so every test that needs a session has to POST.
+ */
+const activate = (token: string) =>
+  app.request('/login/activate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ t: token }).toString(),
+  });
+
 /* ================================================================== */
 describe('sessions and rate limiting', () => {
 
@@ -209,7 +251,7 @@ describe('sessions and rate limiting', () => {
     const token = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(token),
       'new_device', NOW);
-    const r = await app.request(`/login/activate?t=${token}`);
+    const r = await activate(token);
     const cookie = r.headers.get('set-cookie') ?? '';
     assert.match(cookie, /qa_session=/);
     assert.match(cookie, /HttpOnly/, 'a script could read the session token');
@@ -221,7 +263,7 @@ describe('sessions and rate limiting', () => {
     const token = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_RES, await passkey.sha256(token),
       'new_device', NOW);
-    const r = await app.request(`/login/activate?t=${token}`);
+    const r = await activate(token);
     const raw_ = (r.headers.get('set-cookie') ?? '').split(';')[0]!;
     const me = await app.request('/api/me', { headers: { cookie: raw_ } });
     assert.equal(me.status, 200);
@@ -274,7 +316,7 @@ describe('receipt upload', () => {
     const token = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_RES, await passkey.sha256(token),
       'new_device', NOW);
-    const r = await app.request(`/login/activate?t=${token}`);
+    const r = await activate(token);
     resToken = (r.headers.get('set-cookie') ?? '').split(';')[0]!.replace('qa_session=', '');
   });
 
@@ -384,7 +426,7 @@ describe('the five-step wizard carries state', () => {
     const token = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_RES as never,
       await passkey.sha256(token), 'new_device', NOW);
-    const r = await app.request(`/login/activate?t=${token}`);
+    const r = await activate(token);
     tok = (r.headers.get('set-cookie') ?? '').split(';')[0]!.replace('qa_session=', '');
   });
 
@@ -491,7 +533,7 @@ describe('recovery by printed code — R-023', () => {
     const token = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_NEW as never,
       await passkey.sha256(token), 'first_activation', NOW);
-    const html = await (await app.request(`/login/activate?t=${token}`)).text();
+    const html = await (await activate(token)).text();
     codes = [...html.matchAll(/>([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})</g)].map(m => m[1]!);
   });
 

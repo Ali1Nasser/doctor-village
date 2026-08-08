@@ -615,6 +615,15 @@ export interface PageOpts {
    *  is always there stops being a signal. */
   unread?: number;
   showNav?: boolean;
+  /**
+   * Keep this page out of search engines AND out of link-preview cards.
+   *
+   * Set on the activation landing page: that URL gets pasted into WhatsApp, so
+   * it is fetched by crawlers as a matter of course. `noindex` does not stop
+   * the fetch — only not spending the token on a GET does that — but it stops
+   * the page being retained or shown.
+   */
+  noindex?: boolean;
   demo?: boolean;
   offline?: boolean;
   /**
@@ -856,6 +865,7 @@ export function page(opts: PageOpts, body: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#0E5C63">
+${opts.noindex ? '<meta name="robots" content="noindex, nofollow, noarchive">' : ''}
 <title>${esc(opts.title)} — ${esc(t.app.name)}</title>
 <style>${CSS}</style>
 ${opts.jsMessages ? `<script>const MSG=${JSON.stringify(opts.jsMessages)};</script>` : ''}

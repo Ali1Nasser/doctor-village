@@ -15,6 +15,34 @@
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
 
+### What changed in session 31 — ⭐ the activation link that WhatsApp ate
+
+The board's report was exact and is the whole diagnosis: *"لما بعمل لينك تفعيل وبعمل open بيشتغل،
+لكن لو نسخته وبعته على الواتساب يقول تم استخدام هذا اللينك بالفعل."*
+
+`GET /login/activate?t=…` called `consumeActivationChallenge` in its handler, which made the link
+single-**fetch** rather than single-**use**. A URL is opened by far more than the person it was sent
+to: paste one into WhatsApp and Meta's servers fetch it immediately to build the preview card, so
+the token was spent before the resident's phone even buzzed. Browser prefetch, antivirus link
+scanners and mail-security rewriters do the same, which is why the failure looked random and
+depended on the channel.
+
+**This made onboarding the village impossible in practice** — the entire CP-2 plan is "the board
+sends 204 people a link on WhatsApp".
+
+Two more things the same handler was doing: it issued a real `set-cookie` session to whatever
+fetched the URL, and its page greeted the resident **by name** — so a crawler received both a live
+session and a village member's name.
+
+The GET now peeks and renders a button; the POST spends the token. The confirm page sets no cookie,
+carries no personal detail, and is `noindex, nofollow, noarchive`. The regression test fetches a live
+link five times over — standing in for the crawlers — before pressing it.
+
+**The lesson is in INSIGHTS and is worth reading twice:** HTTP requires GET to be safe for exactly
+this reason, and *a bug report that names the channel is naming the cause*.
+
+---
+
 ### What changed in session 30 — accounts, and the wall down the middle of them
 
 The board asked for one rule: **the developer and the board create and edit accounts, and every

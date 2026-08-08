@@ -77,6 +77,40 @@ export async function createActivationChallenge(
  * conditional UPDATE, so two simultaneous clicks on a forwarded link cannot both
  * succeed — the second changes zero rows.
  */
+/**
+ * Is this activation token still live? Answers WITHOUT burning it.
+ *
+ * ## Why this exists
+ *
+ * `consumeActivationChallenge` used to run on the `GET` of
+ * `/login/activate?t=…`, which made the link single-**fetch** rather than
+ * single-**use** — and a URL is fetched by far more than the person it was sent
+ * to. Pasting one into WhatsApp makes Meta's servers open it immediately to
+ * build the preview card, so the token was spent before the resident's phone
+ * ever rang. The board's report was exact: "it works when I click open, but if
+ * I send it on WhatsApp it says the link was already used."
+ *
+ * The same applies to browser prefetch, antivirus link scanners and every other
+ * crawler. It is the reason HTTP requires GET to be safe: anything with a side
+ * effect belongs behind a POST that a human pressed.
+ *
+ * So the GET peeks and the POST burns. Nothing here writes.
+ */
+export async function peekActivationChallenge(
+  db: Db, tokenHash: string, now: Clock,
+): Promise<{ profileId: string; purpose: string } | null> {
+  const row = await db.prepare(
+    `SELECT ac.profile_id, ac.purpose
+       FROM activation_challenges ac JOIN profiles p ON p.id = ac.profile_id
+      WHERE ac.token_hash = ? AND ac.consumed_at IS NULL AND ac.expires_at > ?
+        AND p.is_active = 1`
+  ).bind(tokenHash, now()).first<{ profile_id: string; purpose: string }>();
+  // The NAME is deliberately not selected. A link-preview crawler fetches this
+  // page, so anything it renders is disclosed to whatever service the sender
+  // pasted the link into. The greeting by name comes after the POST.
+  return row ? { profileId: row.profile_id, purpose: row.purpose } : null;
+}
+
 export async function consumeActivationChallenge(
   db: Db, tokenHash: string, now: Clock,
 ): Promise<{ profileId: string; fullName: string; purpose: string } | null> {

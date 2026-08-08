@@ -63,6 +63,31 @@ export function loginPage(error?: string, notice?: string): string {
 </div>`);
 }
 
+/**
+ * The page a NEW activation link lands on. It spends nothing.
+ *
+ * The token used to be burned by the GET, which made the link single-fetch
+ * rather than single-use: pasting it into WhatsApp made Meta's crawler open it
+ * to build a preview card, and the resident's tap then met «تم استخدام اللينك».
+ * Browser prefetch and antivirus scanners do the same.
+ *
+ * So this renders a button and nothing else happens until a human presses it.
+ * It carries NO name and NO personal detail, because whatever is on this page
+ * is disclosed to whichever service the link was pasted into.
+ */
+export function activateConfirmPage(token: string): string {
+  return page({ title: t.activate.title, showNav: false, noindex: true }, `
+<div class="card">
+  <h2 style="margin-block-start:0">🔑 ${esc(t.activate.confirmTitle)}</h2>
+  <p>${esc(t.activate.confirmBody)}</p>
+  <form method="post" action="/login/activate">
+    <input type="hidden" name="t" value="${esc(token)}">
+    <button class="btn" type="submit">${esc(t.activate.confirmCta)}</button>
+  </form>
+  <p class="hint">${esc(t.activate.confirmHint)}</p>
+</div>`);
+}
+
 export function activatePage(name: string, recoveryCodes: string[]): string {
   return page({ title: t.activate.title, showNav: false,
                scripts: [PASSKEY_ENROLL_JS], jsMessages: LOGIN_MSGS }, `

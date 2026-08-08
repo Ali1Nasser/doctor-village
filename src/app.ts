@@ -436,8 +436,39 @@ export function createApp(deps: AppDeps) {
 
   /** The board-issued activation link. Burns the token and opens a short
    *  enrollment session — the ONE moment a passkey can be created. */
+  /**
+   * The activation link, in two halves: a GET that spends nothing and a POST
+   * that spends the token.
+   *
+   * ## The bug this replaces
+   *
+   * The GET used to call `consumeActivationChallenge` directly, which made the
+   * link single-**fetch** rather than single-**use**. A URL is opened by far
+   * more than the person it was sent to: paste one into WhatsApp and Meta's
+   * servers fetch it immediately to build the preview card, so the token was
+   * already spent when the resident finally tapped it. Browser prefetch,
+   * antivirus link scanners and mail-security rewriters all do the same. The
+   * board's report was precise — "it opens when I click it here, but if I send
+   * it on WhatsApp it says the link was already used."
+   *
+   * This is exactly why HTTP requires GET to be safe. A side effect belongs
+   * behind a POST that a human pressed, which is what the confirm page is for.
+   *
+   * Rendering the page also no longer opens a session — the crawler used to be
+   * handed a `set-cookie` for a real resident session as well.
+   */
   app.get('/login/activate', async c => {
     const token = c.req.query('t');
+    if (!token) return html(v.messagePage(_t.activate.title, _t.activate.expired), 400);
+    const live = await adb.peekActivationChallenge(
+      deps.db, await passkey.sha256(token), deps.now);
+    if (!live) return html(v.messagePage(_t.activate.title, _t.activate.used), 410);
+    return html(v.activateConfirmPage(token));
+  });
+
+  app.post('/login/activate', async c => {
+    const f = await c.req.parseBody();
+    const token = String(f['t'] ?? '');
     if (!token) return html(v.messagePage(_t.activate.title, _t.activate.expired), 400);
     const used = await adb.consumeActivationChallenge(
       deps.db, await passkey.sha256(token), deps.now);

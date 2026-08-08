@@ -1233,3 +1233,23 @@ call failed, `grep` swallowed the error, `rm` ran anyway, and the shell reported
 rows were still live and I only noticed because I queried the database afterwards instead of
 trusting the exit. **Verify the state, not the command**, and never pipe the only evidence of a
 failure into a filter that drops it.
+
+**[2026-08-08] [ops] ⭐ A single-use token spent on a GET is single-FETCH, not single-use.**
+`/login/activate?t=…` burned the token in its GET handler. It worked perfectly for the admin who
+clicked it — and died the moment they pasted it into WhatsApp, because Meta's servers open every
+posted URL to build the preview card. The resident's tap then met «تم استخدام هذا اللينك». Browser
+prefetch, antivirus link scanners and mail-security rewriters all do the same thing, so the failure
+was intermittent-looking and channel-dependent, which is the hardest kind to report. **This is
+precisely why HTTP requires GET to be safe.** The fix is structural: the GET peeks and renders a
+button, the POST spends. Anything with a side effect belongs behind a press.
+
+Two smaller things fell out of it, both worth keeping: the GET was also issuing a real
+`set-cookie` session to whatever fetched it, and its page greeted the resident **by name** — so a
+crawler was handed both a live session and a village member's name. The confirm page now carries no
+personal detail and sets no cookie, and is marked `noindex, nofollow, noarchive`.
+
+**[2026-08-08] [agent] A bug report that names the CHANNEL is naming the cause.** "It works when I
+click open, but not when I send it on WhatsApp" is not a vague report — it is the whole diagnosis,
+because the only difference between those two paths is who else fetched the URL in between. When a
+user distinguishes two routes to the same feature, believe the distinction and look at what is
+different about the transport, not at the feature.
