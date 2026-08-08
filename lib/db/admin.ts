@@ -16,7 +16,7 @@
  * "add a mutation" from being a thing you can do quietly.
  */
 
-import type { AuthContext } from '../../types/domain.js';
+import type { AuthContext, Id } from '../../types/domain.js';
 import { require_ } from '../rbac.js';
 import type { Db } from './driver.js';
 import { NotFound } from './index.js';
@@ -246,5 +246,193 @@ export async function listStaffFull(ctx: AuthContext, db: Db): Promise<StaffRow[
             monthly_salary_piastres, started_on, ended_on, is_active
        FROM staff ORDER BY is_active DESC, job_title_ar, id`
   ).all<StaffRow>();
+  return r.results ?? [];
+}
+
+/* ===================================================================== */
+/* The dashboard's queues                                                */
+/* ===================================================================== */
+
+export interface Queues {
+  receipts: number;
+  expenses: number;
+  tickets: number;
+  membersWaiting: number;
+  settlements: number;
+}
+
+/**
+ * What is waiting for somebody, right now.
+ *
+ * The home screen used to show a board member the same thing it showed a
+ * resident: their own dues, and a list of links. A link is not a signal —
+ * «مراجعة الإيصالات» looks identical whether the queue holds zero receipts or
+ * eleven, so the only way to find out was to open it, and the realistic
+ * outcome is that nobody opens it on the day it matters.
+ *
+ * One query, five counts, and the screen only draws the ones the caller may
+ * act on. Capabilities are checked by the CALLER against the same `can()` the
+ * routes use; this function returns the numbers.
+ */
+export async function pendingQueues(ctx: AuthContext, db: Db): Promise<Queues> {
+  require_(ctx.role, 'profile.edit_own');
+  const r = await db.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM payments
+         WHERE status IN ('submitted','under_review'))                    AS receipts,
+       (SELECT COUNT(*) FROM expenses
+         WHERE journal_entry_id IS NULL AND status <> 'reversed')          AS expenses,
+       (SELECT COUNT(*) FROM maintenance_tickets
+         WHERE status NOT IN ('resolved','closed','rejected'))                        AS tickets,
+       (SELECT COUNT(*) FROM profiles p
+         WHERE p.is_active = 1
+           AND NOT EXISTS (SELECT 1 FROM passkeys k
+                            WHERE k.profile_id = p.id AND k.revoked_at IS NULL))
+                                                                          AS membersWaiting,
+       (SELECT COUNT(*) FROM v_open_settlements)                           AS settlements`
+  ).first<Queues>();
+  return r ?? { receipts: 0, expenses: 0, tickets: 0, membersWaiting: 0, settlements: 0 };
+}
+
+/* ===================================================================== */
+/* /me — the caller's own account                                        */
+/* ===================================================================== */
+
+export interface MyAccount {
+  full_name: string;
+  role: string;
+  unit_label: string | null;
+  /** Masked. The full number is `phone.read_any`, which nobody holds over
+   *  themselves — and a screen that prints it is a screen somebody photographs. */
+  phone_masked: string | null;
+  devices: Array<{
+    id: string; device_label_ar: string; created_at: string; last_used_at: string | null;
+  }>;
+}
+
+/**
+ * Everything a person can see about their own account.
+ *
+ * `/me` did not exist, which meant a resident had no way to answer the one
+ * security question this product's design makes possible: **which devices can
+ * open my account?** Passkeys are the whole authentication story here, and an
+ * enrolled device the owner does not recognise is the only visible symptom of
+ * a compromised account.
+ *
+ * The phone number is masked to its last three digits. `phone.read_any` is a
+ * capability an admin holds over other people; nothing needs the full number
+ * rendered on a page the owner will hold up in a WhatsApp video call to ask
+ * their son what it says.
+ */
+export async function myAccount(ctx: AuthContext, db: Db): Promise<MyAccount> {
+  require_(ctx.role, 'profile.edit_own');
+  const p = await db.prepare(
+    `SELECT p.full_name, p.role,
+            (SELECT b.name_ar || ' — ' || u.unit_number
+               FROM unit_owners uo
+               JOIN units u ON u.id = uo.unit_id
+               JOIN buildings b ON b.id = u.building_id
+              WHERE uo.profile_id = p.id AND uo.valid_to IS NULL
+              LIMIT 1)                                          AS unit_label,
+            (SELECT '••••' || substr(pi.phone_e164, -3)
+               FROM phone_identifiers pi
+              WHERE pi.profile_id = p.id AND pi.status = 'active'
+              LIMIT 1)                                          AS phone_masked
+       FROM profiles p WHERE p.id = ?`
+  ).bind(ctx.personId).first<Omit<MyAccount, 'devices'>>();
+  if (!p) throw new NotFound('الحساب مش موجود');
+
+  const k = await db.prepare(
+    `SELECT id, device_label_ar, created_at, last_used_at
+       FROM passkeys
+      WHERE profile_id = ? AND revoked_at IS NULL
+      ORDER BY COALESCE(last_used_at, created_at) DESC`
+  ).bind(ctx.personId).all<{
+    id: string; device_label_ar: string; created_at: string; last_used_at: string | null;
+  }>();
+
+  return { ...p, devices: k.results ?? [] };
+}
+
+/* ===================================================================== */
+/* دفتر القيود — the journal                                             */
+/* ===================================================================== */
+
+export interface JournalEntryRow {
+  id: string;
+  entry_no: string;
+  entry_date: string;
+  description_ar: string;
+  source_type: string;
+  posted_at: string | null;
+  is_reversal: number;
+  amount_piastres: number;
+  line_count: number;
+}
+
+/**
+ * The journal, newest first.
+ *
+ * `/finance` answers "how much"; this answers "on what basis". A board asked
+ * to approve last year's accounts needs to be able to open the actual entries,
+ * and a treasurer defending a figure needs to be able to point at one — neither
+ * was possible from the product, so the ledger existed and could only be read
+ * with `sqlite3`.
+ *
+ * Only POSTED entries carry money. Unposted ones are shown too, and marked,
+ * because an entry that was created and never posted is a real and confusing
+ * state (it is what R-078 looked like from the inside) and hiding it would make
+ * this screen agree with a wrong total.
+ */
+export async function journalCount(ctx: AuthContext, db: Db): Promise<number> {
+  require_(ctx.role, 'audit.read');
+  const r = await db.prepare(`SELECT COUNT(*) AS n FROM journal_entries`).first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
+export async function journal(
+  ctx: AuthContext, db: Db, limit = 60, offset = 0,
+): Promise<JournalEntryRow[]> {
+  require_(ctx.role, 'audit.read');
+  const r = await db.prepare(
+    `SELECT e.id, e.entry_no, e.entry_date, e.description_ar, e.source_type,
+            e.posted_at, e.is_reversal,
+            (SELECT COALESCE(SUM(l.debit_piastres), 0) FROM journal_lines l
+              WHERE l.entry_id = e.id)                       AS amount_piastres,
+            (SELECT COUNT(*) FROM journal_lines l WHERE l.entry_id = e.id) AS line_count
+       FROM journal_entries e
+      ORDER BY e.entry_date DESC, e.rowid DESC
+      LIMIT ? OFFSET ?`
+  ).bind(Math.min(limit, 200), Math.max(offset, 0)).all<JournalEntryRow>();
+  return r.results ?? [];
+}
+
+export interface JournalLineRow {
+  line_no: number;
+  account_code: string;
+  account_name: string;
+  fund_name: string | null;
+  debit_piastres: number;
+  credit_piastres: number;
+  memo_ar: string | null;
+  unit_label: string | null;
+}
+
+export async function journalLines(
+  ctx: AuthContext, db: Db, entryId: Id,
+): Promise<JournalLineRow[]> {
+  require_(ctx.role, 'audit.read');
+  const r = await db.prepare(
+    `SELECT l.line_no, a.code AS account_code, a.name_ar AS account_name,
+            f.name_ar AS fund_name, l.debit_piastres, l.credit_piastres, l.memo_ar,
+            (SELECT b.name_ar || ' — ' || u.unit_number
+               FROM units u JOIN buildings b ON b.id = u.building_id
+              WHERE u.id = l.unit_id)                        AS unit_label
+       FROM journal_lines l
+       JOIN accounts a ON a.id = l.account_id
+       LEFT JOIN funds f ON f.id = l.fund_id
+      WHERE l.entry_id = ?
+      ORDER BY l.line_no`
+  ).bind(entryId).all<JournalLineRow>();
   return r.results ?? [];
 }

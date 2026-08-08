@@ -134,10 +134,101 @@ body{margin:0;background:var(--bg);color:var(--ink);line-height:1.75;font-size:1
 .skip{position:absolute;inset-block-start:-100px;inset-inline-start:0;background:var(--brand);
   color:var(--brand-ink);padding:12px;z-index:99}
 .skip:focus{inset-block-start:0}
-header{background:var(--brand);color:var(--brand-ink);padding:18px 16px}
-header h1{margin:0;font-size:1.3rem}
-header p{margin:2px 0 0;opacity:.85;font-size:.9rem}
-main{max-width:760px;margin:0 auto;padding:16px 16px 96px}
+/* ---- the app bar ---------------------------------------------------------
+   Sticky, because it carries the drawer and on a long finance table the way
+   back to everything else should not be a scroll to the top. */
+header{background:var(--brand);color:var(--brand-ink);padding:10px 12px;
+  display:flex;align-items:center;gap:10px;position:sticky;inset-block-start:0;z-index:40;
+  box-shadow:0 1px 0 rgba(0,0,0,.12)}
+header .htext{flex:1;min-inline-size:0}
+header h1{margin:0;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header p{margin:0;opacity:.85;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hctl{display:flex;align-items:center;gap:6px;flex:none}
+.hctl form{margin:0}
+.hctl button,.hbtn{min-inline-size:38px;min-block-size:38px;display:inline-flex;align-items:center;
+  justify-content:center;border-radius:10px;border:0;background:rgba(255,255,255,.14);
+  color:var(--brand-ink);font-family:inherit;font-size:1rem;cursor:pointer;
+  text-decoration:none;position:relative;padding:0 8px}
+.hctl button:hover,.hbtn:hover{background:rgba(255,255,255,.26)}
+.hdot{position:absolute;inset-block-start:-4px;inset-inline-end:-4px;min-inline-size:18px;
+  block-size:18px;border-radius:999px;background:var(--danger);color:#fff;font-size:.66rem;
+  font-weight:700;display:grid;place-items:center;padding:0 4px}
+.avatar{inline-size:38px;block-size:38px;border-radius:999px;background:var(--brand-ink);
+  color:var(--brand);display:grid;place-items:center;font-weight:800;font-size:.85rem;
+  text-decoration:none;flex:none}
+
+/* ---- the drawer: <details>, so it works with no JavaScript at all -------- */
+.drawer{flex:none}
+.drawer > summary{list-style:none;min-inline-size:40px;min-block-size:40px;display:grid;
+  place-items:center;border-radius:10px;background:rgba(255,255,255,.14);cursor:pointer;
+  font-size:1.15rem}
+.drawer > summary::-webkit-details-marker{display:none}
+.drawer > summary:hover{background:rgba(255,255,255,.26)}
+.drawer[open] > summary{background:rgba(255,255,255,.3)}
+.drawer-panel{position:fixed;inset-block:0;inset-inline-start:0;inline-size:min(86vw,320px);
+  background:var(--surface);color:var(--ink);z-index:60;overflow-y:auto;padding:14px 12px 90px;
+  box-shadow:0 0 0 100vmax rgba(0,0,0,.45);border-inline-end:1px solid var(--border)}
+.dgroup{margin-block-end:14px}
+.dgroup h2{font-size:.78rem;margin:12px 6px 6px;color:var(--ink-muted);font-weight:700;
+  letter-spacing:.02em}
+.dgroup a{display:flex;align-items:center;gap:10px;min-block-size:var(--tap);padding:6px 10px;
+  border-radius:10px;color:var(--ink);text-decoration:none;font-weight:600;font-size:.95rem}
+.dgroup a:hover{background:var(--surface-2)}
+.dgroup a[aria-current="page"]{background:var(--brand-soft);color:var(--brand)}
+.dgroup a .ico{inline-size:26px;text-align:center;flex:none}
+.dgroup a .badge{margin-inline-start:auto}
+/* At 390px the bar was carrying a drawer, a title, a name, a role and five
+   controls, and every string truncated to «بوابة ق…». Measured, not guessed.
+   The app name is the least useful thing there — it is on the tab, and the
+   person already knows which app they opened — so below 560px the identity
+   takes the space and search falls back to the drawer, where it also lives. */
+/* Name and role are two elements, not one string: with «name — role» on one
+   line the role is what gets truncated away, and the role is the half the
+   header exists to add. */
+header p.who{display:flex;flex-direction:column;line-height:1.35}
+header p.who b{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header p.who span{font-size:.74rem;opacity:.85;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+@media (max-width:560px){
+  header .htext h1{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;
+    clip-path:inset(50%);white-space:nowrap}
+}
+@media (max-width:430px){
+  .hctl .hbtn[href="/search"]{display:none}
+}
+/* ---- dashboard: queues, the treasury card, the activity timeline -------- */
+.queues{display:grid;gap:10px}
+.queue{display:flex;align-items:center;gap:12px;background:var(--surface);
+  border:1px solid var(--border);border-inline-start:5px solid var(--warn);
+  border-radius:var(--radius);padding:14px;text-decoration:none;color:var(--ink);
+  min-block-size:var(--tap)}
+.queue:hover,.queue:focus-visible{border-color:var(--brand);background:var(--surface-2)}
+.queue .qico{font-size:1.4rem;flex:none}
+.queue .qbody{display:flex;align-items:baseline;gap:8px;flex:1;min-inline-size:0;flex-wrap:wrap}
+.queue .qn{font-size:1.6rem;font-weight:800;line-height:1}
+.queue .qlabel{font-size:.95rem;color:var(--ink-muted)}
+.queue .qgo{flex:none;color:var(--brand);font-weight:700;font-size:.9rem}
+.hero-card{background:var(--brand);color:var(--brand-ink);border-radius:var(--radius);
+  padding:18px;margin-block-end:12px}
+.hero-card .lbl{font-size:.9rem;opacity:.85}
+.hero-card .v{font-size:2rem;font-weight:800;margin-block:4px}
+.hero-card .note{font-size:.85rem;opacity:.85}
+.hero-card .cur{color:inherit;opacity:.8}
+/* A timeline, not a table: these are events in order, and the rail is what
+   makes "in order" visible without a date column repeating the year. */
+.timeline{list-style:none;margin:0;padding:0;padding-inline-start:18px;
+  border-inline-start:2px solid var(--border)}
+.timeline li{position:relative;padding-block:8px;display:flex;flex-direction:column;gap:2px}
+.timeline li::before{content:"";position:absolute;inset-inline-start:-25px;inset-block-start:16px;
+  inline-size:10px;block-size:10px;border-radius:50%;background:var(--brand);
+  box-shadow:0 0 0 3px var(--bg)}
+.timeline li b{font-size:.95rem}
+.timeline li .muted{font-size:.82rem}
+/* The bottom padding clears BOTH fixed things: the tab bar (~95px) and the
+   help bubble that floats 82px above it. At 96px the last control on a page —
+   «اقفل كل الجلسات» on /me — ended one pixel under the bubble, which is the
+   kind of overlap that only shows up on the last card of the longest screen. */
+main{max-width:760px;margin:0 auto;padding:16px 16px 150px}
 h2{font-size:1.2rem;margin:28px 0 12px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:18px;margin-block-end:14px}
@@ -291,7 +382,12 @@ nav.bottom .ico{font-size:1.2rem}
 .btn-sm{min-block-size:38px;font-size:.9rem;padding:6px 12px;inline-size:auto;margin-block-start:0}
 /* A wide table must scroll INSIDE its card. Letting the page scroll sideways
    in RTL puts the start of every line off-screen. */
+/* A region that scrolls must be reachable by keyboard, or its content is
+   unreachable to anyone not using a pointer — WCAG 2.2 AA, and axe fails the
+   build over it. Hence tabindex="0" on every .table-wrap; the outline says
+   where the focus went, because a silent tab stop is its own confusion. */
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.table-wrap:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 .table-wrap table{min-inline-size:520px}
 .field.check label{display:flex;align-items:flex-start;gap:10px;font-weight:600;cursor:pointer}
 .field.check input{inline-size:22px;block-size:22px;flex:none;margin-block-start:2px}
@@ -384,7 +480,9 @@ header .htext{flex:1;min-inline-size:0}
     font-size:1rem;border-radius:12px;padding:10px 14px}
   nav.bottom a[aria-current="page"]{background:var(--brand-soft)}
   .shell{display:flex;align-items:flex-start}
-  main{flex:1;max-width:900px;padding-block-end:40px}
+  /* No tab bar at this width, but the help bubble is still fixed 20px up —
+     so the reserve shrinks to clear that alone rather than to zero. */
+  main{flex:1;max-width:900px;padding-block-end:90px}
   .fab{inset-block-end:20px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 }
@@ -457,6 +555,21 @@ export interface PageOpts {
   showNav?: boolean;
   demo?: boolean;
   offline?: boolean;
+  /**
+   * Who is looking at this page, for the app bar and the drawer.
+   *
+   * Absent on the login and activation screens, which is why every field is
+   * optional rather than the object being required: those screens have no
+   * identity to show and must not pretend otherwise.
+   */
+  /** Current path, so the drawer can mark the active destination. */
+  path?: string;
+  me?: {
+    name: string;
+    roleAr: string;
+    /** Destinations this caller may open, grouped. Computed from `can()`. */
+    menu?: Array<{ group: string; items: Array<{ href: string; icon: string; label: string; badge?: number }> }>;
+  };
 }
 
 /**
@@ -518,7 +631,109 @@ export function applyPrefs(html: string, theme: string, fs: string, path: string
     .replaceAll('name="next" value=""', `name="next" value="${esc(path)}"`);
 }
 
+/**
+ * The application shell.
+ *
+ * ## The app bar tells you who you are
+ *
+ * It used to be a title and a place name — the same eleven words on every
+ * screen for every person. A board member and a resident saw an identical
+ * header, which is a wasted strip on the most valuable real estate in the
+ * product. It now carries an avatar built from the caller's initials, their
+ * name, and their ROLE, because on a portal where an operator and an admin see
+ * different buttons, "which hat am I wearing" is a question worth answering
+ * without being asked.
+ *
+ * ## The drawer is `<details>`, not JavaScript
+ *
+ * Nineteen destinations do not fit in five bottom-nav slots, and the board
+ * screens were previously reachable only from a card on the home page. A
+ * `<details>` element gives an open/close menu with keyboard support, a real
+ * focus ring and correct semantics for a screen reader, in zero bytes of
+ * script. Two existing tests assert that the expense and reversal screens ship
+ * no `<script>` at all; this shell keeps that true everywhere.
+ *
+ * The menu is COMPUTED per caller from `can()` — never rendered and hidden with
+ * CSS. A link that appears is a link that works.
+ */
+/**
+ * Fill the app bar and drawer in from the request, for the ~40 screens that do
+ * not pass `me` themselves.
+ *
+ * Same shape and the same reason as `applyPrefs`: identity is request state,
+ * views are not allowed to know about requests, and threading a `me` object
+ * through forty call sites would mean the one screen that forgot it renders a
+ * header with nobody in it. Both substitutions are on markers `page()` emits
+ * verbatim, and a page that already supplied `me` is left alone.
+ *
+ * If the middleware never runs, every screen still renders — with the place
+ * name in the subtitle and no drawer, which is exactly what the login screen
+ * wants anyway.
+ */
+export function applyShell(
+  html: string,
+  shell: { name: string; roleAr: string; unread?: number;
+           menu: Array<{ group: string; items: Array<{ href: string; icon: string; label: string }> }> },
+  path: string,
+): string {
+  if (!html.includes('<!--SHELL_DRAWER-->')) return html;
+
+  const initials = shell.name
+    .replace(/^(د|م|أ|عم)\.?\s+/, '')
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(w => [...w][0] ?? '').join('');
+
+  const drawer = `<details class="drawer">
+  <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}"><span aria-hidden="true">☰</span></summary>
+  <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">
+    ${shell.menu.map(g => `<div class="dgroup"><h2>${esc(g.group)}</h2>${
+      g.items.map(i => `<a href="${esc(i.href)}" ${i.href === path ? 'aria-current="page"' : ''}>`
+        + `<span class="ico" aria-hidden="true">${esc(i.icon)}</span><span>${esc(i.label)}</span></a>`).join('')
+    }</div>`).join('')}
+  </nav>
+</details>`;
+
+  const ctl = `<a class="hbtn" href="/search" aria-label="${esc(t.search.title)}"`
+    + ` title="${esc(t.search.title)}"><span aria-hidden="true">🔎</span></a>`
+    + `<a class="hbtn" href="/notifications" aria-label="${esc(t.nav.inbox)}"`
+    + ` title="${esc(t.nav.inbox)}"><span aria-hidden="true">🔔</span>`
+    + (shell.unread ? `<span class="hdot">${num(shell.unread)}</span>` : '') + `</a>`;
+
+  return html
+    .replace('<!--SHELL_DRAWER-->', drawer)
+    .replace(`<p><!--SHELL_WHO-->${esc(t.app.place)}</p>`,
+             `<p class="who"><b>${esc(shell.name)}</b><span>${esc(shell.roleAr)}</span></p>`)
+    .replace('<!--SHELL_CTL-->', ctl)
+    .replace('<!--SHELL_AVATAR-->',
+      `<a class="avatar" href="/me" aria-label="${esc(t.me.title)}"`
+      + ` title="${esc(shell.name)}">${esc(initials)}</a>`);
+}
+
 export function page(opts: PageOpts, body: string): string {
+  const initials = (opts.me?.name ?? '')
+    .replace(/^(د|م|أ|عم)\.?\s+/, '')          // titles are not initials
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(w => [...w][0] ?? '').join('');
+
+  const drawer = opts.me?.menu?.length ? `
+<details class="drawer" id="drawer">
+  <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}">
+    <span aria-hidden="true">☰</span>
+  </summary>
+  <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">
+    ${opts.me.menu.map(g => `
+    <div class="dgroup">
+      <h2>${esc(g.group)}</h2>
+      ${g.items.map(i => `
+      <a href="${esc(i.href)}" ${i.href === opts.path ? 'aria-current="page"' : ''}>
+        <span class="ico" aria-hidden="true">${esc(i.icon)}</span>
+        <span>${esc(i.label)}</span>
+        ${i.badge ? `<span class="chip warn badge">${num(i.badge)}</span>` : ''}
+      </a>`).join('')}
+    </div>`).join('')}
+  </nav>
+</details>` : '';
+
   const nav = opts.showNav === false ? '' : `
 <nav class="bottom" aria-label="${esc(t.a11y.menu)}">
   <a href="/" ${opts.active === 'home' ? 'aria-current="page"' : ''}><span class="ico" aria-hidden="true">🏠</span>${esc(t.nav.home)}</a>
@@ -538,6 +753,7 @@ export function page(opts: PageOpts, body: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0E5C63">
 <title>${esc(opts.title)} — ${esc(t.app.name)}</title>
 <style>${CSS}</style>
 ${opts.jsMessages ? `<script>const MSG=${JSON.stringify(opts.jsMessages)};</script>` : ''}
@@ -545,8 +761,19 @@ ${opts.jsMessages ? `<script>const MSG=${JSON.stringify(opts.jsMessages)};</scri
 <body>
 <a class="skip" href="#main">${esc(t.a11y.skipToContent)}</a>
 <header>
-  <div class="htext"><h1>${esc(t.app.name)}</h1><p>${esc(t.app.place)}</p></div>
+  ${drawer}<!--SHELL_DRAWER-->
+  <div class="htext">
+    <h1>${esc(t.app.name)}</h1>
+    <p><!--SHELL_WHO-->${opts.me
+      ? `<b>${esc(opts.me.name)}</b><span>${esc(opts.me.roleAr)}</span>`
+      : esc(t.app.place)}</p>
+  </div>
   <div class="hctl">
+    ${opts.me ? `<a class="hbtn" href="/search" aria-label="${esc(t.search.title)}"
+        title="${esc(t.search.title)}"><span aria-hidden="true">🔎</span></a>
+    <a class="hbtn" href="/notifications" aria-label="${esc(t.nav.inbox)}"
+        title="${esc(t.nav.inbox)}"><span aria-hidden="true">🔔</span>${
+        opts.unread ? `<span class="hdot">${num(opts.unread)}</span>` : ''}</a>` : ''}<!--SHELL_CTL-->
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
       <input type="hidden" name="next" value="">
@@ -559,6 +786,8 @@ ${opts.jsMessages ? `<script>const MSG=${JSON.stringify(opts.jsMessages)};</scri
       <button type="submit" aria-label="${esc(t.a11y.theme)}"
               title="${esc(t.a11y.theme)}">◐</button>
     </form>
+    ${opts.me ? `<a class="avatar" href="/me" aria-label="${esc(t.me.title)}"
+        title="${esc(opts.me.name)}">${esc(initials)}</a>` : ''}<!--SHELL_AVATAR-->
   </div>
 </header>
 <div class="shell">

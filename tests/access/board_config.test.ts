@@ -120,6 +120,12 @@ describe('the board screens are closed to everybody else', () => {
     ['/admin/settings',   ['tok-op', 'tok-res', 'tok-rev']],
     ['/admin/staff',      ['tok-res']],
     ['/admin/audit',      ['tok-op', 'tok-res']],
+    ['/admin/ledger',     ['tok-op', 'tok-res']],
+    // Two doors onto the same village register, and neither is an operator's.
+    // `user.import` creates people; `phone.change` re-credentials one. An
+    // operator records receipts and expenses, and holds neither.
+    ['/admin/import',     ['tok-op', 'tok-res', 'tok-rev']],
+    ['/admin/recoveries', ['tok-op', 'tok-res', 'tok-rev']],
     // ⭐ Residents hold `finance.read_totals` on purpose — the village totals
     // are published. This screen names which FLATS the village owes money to,
     // which is a different fact about a different person, so it sits behind

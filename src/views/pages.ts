@@ -83,8 +83,16 @@ export function activatePage(name: string, recoveryCodes: string[]): string {
 
 export interface HomeData {
   name: string;
-  building: string;
-  unit: string;
+  /**
+   * The caller's own flat — `null` when they own none.
+   *
+   * A board member who owns no unit was shown «عمارة — شقة —» above
+   * «إجمالي المطلوب منك 0.00» and a «دفع جديد» button: three statements that
+   * are each false about them, on the first screen they see. The dues card is
+   * about a flat, so it is drawn only when there is one.
+   */
+  building: string | null;
+  unit: string | null;
   duePiastres: number;
   paidPiastres: number;
   outstandingPiastres: number;
@@ -101,20 +109,21 @@ export interface HomeData {
   unread?: number;
   demo?: boolean;
   /**
-   * Board screens this particular caller is allowed to open.
+   * Work waiting for THIS caller, with counts and a direct action.
    *
-   * Every admin screen existed and none of them was linked from anywhere: the
-   * five nav tabs are the resident's, and an admin who logged in landed on the
-   * same home page as everyone else with no way forward except typing
-   * `/admin/…` into the address bar. A board of retired doctors will not do
-   * that, so in practice the whole admin half of the portal was unreachable.
-   *
-   * The list is computed from `can()` per caller — never rendered and then
-   * hidden with CSS. A link that appears is a link that works; the route
-   * re-checks the same capability anyway (permissions live in the database,
-   * not in the markup), so this is navigation, not enforcement.
+   * The board's half of the home screen used to be a list of links, and a link
+   * is not a signal: «مراجعة الإيصالات» reads the same whether the queue holds
+   * zero receipts or eleven, so the only way to find out was to open it. On a
+   * volunteer board that means nobody opens it on the day it matters.
    */
-  adminLinks?: { href: string; icon: string; label: string }[];
+  queues?: { icon: string; label: string; count: number; href: string; cta: string }[];
+  /** Total income and expense, for the treasury card's one-line breakdown. */
+  incomePiastres?: number;
+  expensePiastres?: number;
+  /** The most recent board announcements. */
+  news?: { slug: string; title: string; published: string }[];
+  /** The audit feed, for the board only. */
+  activity?: { who: string; what: string; when: string }[];
 }
 
 export function homePage(d: HomeData): string {
@@ -122,12 +131,16 @@ export function homePage(d: HomeData): string {
   // ever asked of them. Telling them "خالص" is a promise the board has not made.
   const billed = d.duePiastres > 0;
   const settled = billed && d.outstandingPiastres <= 0;
+  const hasUnit = !!d.building && !!d.unit;
   return page({ title: t.nav.home, active: 'home', unread: d.unread, demo: d.demo }, `
 ${d.pinned ? `<div class="banner info"><strong>📌 ${esc(d.pinned.title)}</strong><br>${esc(d.pinned.body)}</div>` : ''}
 
 <div class="card">
-  <div class="muted">${esc(msg(t.home.greeting, { name: d.name }))} ·
-    ${msgHtml(esc(t.home.unit), { building: num(d.building), unit: num(d.unit) })}</div>
+  <div class="muted">${esc(msg(t.home.greeting, { name: d.name }))}${hasUnit
+    ? ` ·\n    ${msgHtml(esc(t.home.unit), { building: num(d.building!), unit: num(d.unit!) })}` : ''}</div>
+  ${!hasUnit ? `
+  <p style="margin-block-end:0"><strong>${esc(t.home.noUnit)}</strong></p>
+  <p class="hint">${esc(t.home.noUnitHint)}</p>` : `
   <div class="muted" style="margin-block-start:10px">${esc(t.home.dueThisYear)}</div>
   <div class="hero">${money(d.duePiastres)}</div>
   ${d.periodCount > 1
@@ -143,7 +156,7 @@ ${d.pinned ? `<div class="banner info"><strong>📌 ${esc(d.pinned.title)}</stro
         { amount: money(d.depositHeldPiastres) })}</div>`
     : ''}
   <a class="btn" href="/pay">${esc(t.home.payNow)}</a>
-  <a class="btn btn-2" href="/payments">${esc(t.home.seeMyReceipts)}</a>
+  <a class="btn btn-2" href="/payments">${esc(t.home.seeMyReceipts)}</a>`}
 </div>
 
 <!-- 07_VILLAGE_MAP_SPEC §4: "a prominent «خريطة القرية» card on the home page.
@@ -159,12 +172,37 @@ ${d.pinned ? `<div class="banner info"><strong>📌 ${esc(d.pinned.title)}</stro
   <span class="row-end" aria-hidden="true">←</span>
 </a>
 
+${(d.queues ?? []).length > 0 ? `
+<h2>${esc(t.dash.needsYou)}</h2>
+${(d.queues ?? []).filter(q => q.count > 0).length === 0
+  ? `<div class="card"><div class="empty" style="padding:20px">
+      <div class="big" aria-hidden="true">👍</div>
+      <p>${esc(t.dash.nothingPending)}</p>
+      <p class="muted">${esc(t.dash.nothingPendingHint)}</p></div></div>`
+  : `<div class="queues">
+    ${(d.queues ?? []).filter(q => q.count > 0).map(q => `
+    <a class="queue" href="${esc(q.href)}">
+      <span class="qico" aria-hidden="true">${esc(q.icon)}</span>
+      <span class="qbody">
+        <span class="qn">${num(q.count)}</span>
+        <span class="qlabel">${esc(q.label)}</span>
+      </span>
+      <span class="qgo">${esc(q.cta)} ←</span>
+    </a>`).join('')}
+  </div>`}` : ''}
+
 <h2>${esc(t.home.villageMoney)}</h2>
+<!-- The treasury reads as the headline figure it is: inverted, so the eye lands
+     on it before the two supporting tiles. Same pattern the board already knows
+     from the sandbox they reviewed. -->
+<div class="hero-card">
+  <div class="lbl">${esc(t.dash.treasury)}</div>
+  <div class="v">${money(d.spendablePiastres)}</div>
+  ${d.incomePiastres !== undefined && d.expensePiastres !== undefined
+    ? `<div class="note">${msgHtml(esc(t.dash.treasuryBreak), {
+        in: money(d.incomePiastres), out: money(d.expensePiastres) })}</div>` : ''}
+</div>
 <div class="tiles">
-  <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
-    <div class="lbl"><span class="ico" aria-hidden="true">✔</span>${esc(t.finance.spendable)}</div>
-    <div class="v">${money(d.spendablePiastres)}</div>
-  </div>
   <div class="tile" style="--tc:var(--ink-muted);--tsoft:var(--surface-2)">
     <div class="lbl"><span class="ico" aria-hidden="true">🔒</span>${esc(t.finance.heldInTrust)}</div>
     <div class="v">${money(d.heldInTrustPiastres)}</div>
@@ -173,18 +211,34 @@ ${d.pinned ? `<div class="banner info"><strong>📌 ${esc(d.pinned.title)}</stro
 </div>
 <a class="btn btn-2" href="/finance">${esc(t.finance.title)} ←</a>
 
-${(d.adminLinks ?? []).length > 0 ? `
-<h2>${esc(t.home.boardTools)}</h2>
+${(d.news ?? []).length > 0 ? `
+<h2>${esc(t.dash.latestNews)}</h2>
 <div class="card">
-  <p class="muted" style="margin-block-start:0">${esc(t.home.boardToolsHint)}</p>
-  <div class="tools">
-    ${(d.adminLinks ?? []).map(l => `
-    <a class="tool" href="${esc(l.href)}">
-      <span class="ico" aria-hidden="true">${esc(l.icon)}</span>${esc(l.label)}
-      <span class="go" aria-hidden="true">←</span>
-    </a>`).join('')}
-  </div>
-</div>` : ''}`);
+  ${(d.news ?? []).map(n => `
+  <a class="row row-link" href="/news/${esc(n.slug)}">
+    <span class="ico" aria-hidden="true">📣</span>
+    <span class="row-body">
+      <b>${esc(n.title)}</b>
+      <span class="muted">${arDate(n.published)}</span>
+    </span>
+  </a>`).join('')}
+  <a class="btn btn-2" href="/news">${esc(t.dash.allNews)}</a>
+</div>` : ''}
+
+${(d.activity ?? []).length > 0 ? `
+<h2>${esc(t.dash.activity)}</h2>
+<div class="card">
+  <p class="hint" style="margin-block-start:0">${esc(t.dash.activityHint)}</p>
+  <ol class="timeline">
+    ${(d.activity ?? []).map(a => `
+    <li>
+      <b>${esc(a.what)}</b>
+      <span class="muted">${esc(a.who)} · ${arDate(a.when)}</span>
+    </li>`).join('')}
+  </ol>
+</div>` : ''}
+
+`);
 }
 
 /* ===================================================================== */

@@ -1098,3 +1098,43 @@ SQLite's `||` coerces blobs to text. R2 was already refused for wanting a card. 
 ship the plan in the Worker bundle — one file for the whole village, versioned with the release that
 drew hotspots on it. Same shape as the D1 `GLOB` limit found on 2026-08-07: **the platform's real
 limits appear on the first write of real data, never in review.**
+
+**[2026-08-08] [agent] Walk a prototype's navigation against the route table — every destination,
+in order.** The owner's sandbox HTML had six board destinations. Four of them (`حسابي`,
+`دفتر القيود`, `استيراد الملاك`, `الاستعادة والتفعيل`) had no route in the app, and two of those were
+whole procedures whose data layer was written, tested and unreachable — `requestRecovery` /
+`approveRecovery` / `fulfilRecovery` had passing tests and no door. This is session 28's lesson
+arriving from a different direction: a test that calls the data layer directly cannot tell you the
+product has no path to it. The cheap version of the check is a text diff of "every href a mockup
+mentions" against "every path `app.get` registers" — it took an afternoon and found four.
+
+**[2026-08-08] [ux] An empty demo table is a claim about the product, not an absence of data.**
+`audit_log` was the one table `seed/demo/` never wrote, so «سجل التغييرات» — the screen whose entire
+purpose is to show that nothing happens behind anyone's back — rendered its empty state at a board
+presentation about accountability, and the dashboard's activity strip could not appear at all.
+Seeding it also forced a design question worth having: the 200 residents get **two** audit rows
+(`import.stage`, `import.commit`) naming one chairman, not 200 silent inserts, because that is what
+the product actually does. **A seed that disagrees with the product is describing a different
+system.**
+
+**[2026-08-08] [a11y] `overflow-x:auto` without `tabindex="0"` fails WCAG the moment there is data
+in it.** The audit table passed axe for weeks because the demo had zero audit rows; one seed change
+later, `scrollable-region-focusable` failed the build. A region that scrolls but cannot receive
+focus is unreachable to anyone not using a pointer. Every `.table-wrap` in this codebase now carries
+`tabindex="0"` and a visible focus ring. **Accessibility scans are only as good as the fixture's
+data volume** — the same is true of every screenshot review.
+
+**[2026-08-08] [design] Do not reuse a function whose REFUSAL is the security boundary.**
+After a fulfilled recovery every passkey is revoked, so `issueFirstActivation` — which exists to
+refuse anyone holding a passkey — would have worked, and worked for the wrong reason. Its guard is
+what stops an admin minting a credential onto a live account; the next person to relax it would
+silently reopen the hole. `issueRecoveryActivation` demands the opposite proof instead (a two-admin
+request that was actually fulfilled) and records `purpose='recovery'`, so «إزاي ده اتفعّل» has one
+answer per account and both answers are on the record.
+
+**[2026-08-08] [agent] `hash()` on a `str` is randomised per Python process.** `seed/demo/generate.py`
+promised in its own docstring that "re-running produces byte-identical SQL, so a diff is meaningful",
+and used `abs(hash(pid))` for the receipt digests — so every regeneration rewrote all 243 of them and
+the diff was 486 lines of noise. Nobody reads a diff like that, which means nobody would have seen a
+real change hiding in it. Any generator that claims determinism must use `hashlib`, never `hash()`,
+and the claim is worth testing: generate twice, `diff -q`.

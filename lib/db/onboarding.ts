@@ -123,16 +123,87 @@ export async function fulfilRecovery(
   return { targetProfileId: r.target_profile_id, fullName: r.full_name };
 }
 
-export async function listOpenRecoveries(ctx: AuthContext, db: Db) {
+export interface OpenRecovery {
+  id: string;
+  identity_check_ar: string;
+  requested_by: string;
+  requested_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  target_name: string;
+  target_unit: string | null;
+  requested_by_name: string | null;
+  approved_by_name: string | null;
+}
+
+/**
+ * The open recovery requests, with the names of everyone who has signed.
+ *
+ * This used to return bare profile ids for `requested_by` and `approved_by`,
+ * which is all a JSON caller needed and all any caller could get. On a screen
+ * the ids are the point: the second admin has to see WHO opened the request
+ * before deciding whether to co-sign it — approving a request you cannot
+ * attribute is not maker–checker, it is a second click.
+ */
+export async function listOpenRecoveries(ctx: AuthContext, db: Db): Promise<OpenRecovery[]> {
   require_(ctx.role, 'phone.change');
   const r = await db.prepare(
-    `SELECT rr.id, rr.identity_check_ar, rr.requested_by, rr.requested_at, rr.approved_by,
-            p.full_name AS target_name
-       FROM recovery_requests rr JOIN profiles p ON p.id = rr.target_profile_id
+    `SELECT rr.id, rr.identity_check_ar, rr.requested_by, rr.requested_at,
+            rr.approved_by, rr.approved_at,
+            p.full_name  AS target_name,
+            rq.full_name AS requested_by_name,
+            ap.full_name AS approved_by_name,
+            (SELECT b.name_ar || ' — ' || u.unit_number
+               FROM unit_owners uo
+               JOIN units u ON u.id = uo.unit_id
+               JOIN buildings b ON b.id = u.building_id
+              WHERE uo.profile_id = p.id AND uo.valid_to IS NULL
+              LIMIT 1)   AS target_unit
+       FROM recovery_requests rr
+       JOIN profiles p ON p.id = rr.target_profile_id
+       LEFT JOIN profiles rq ON rq.id = rr.requested_by
+       LEFT JOIN profiles ap ON ap.id = rr.approved_by
       WHERE rr.fulfilled_at IS NULL AND rr.cancelled_at IS NULL
       ORDER BY rr.requested_at`
-  ).all();
-  return r.results;
+  ).all<OpenRecovery>();
+  return r.results ?? [];
+}
+
+/**
+ * The people a recovery request can be opened for: those who hold a device.
+ *
+ * Recovery is the procedure for losing an enrolled phone, so somebody with no
+ * passkey has nothing to recover — for them the answer is a first activation
+ * link from `/admin/members`, which needs one signature instead of two. Offering
+ * the whole village here would invite the board to run the heavy procedure by
+ * default, and `issueFirstActivation` refusing afterwards is a lesson learned
+ * too late.
+ *
+ * Gated on `phone.change`, the same capability as the request itself — this
+ * screen must not need `user.create` on top, or the two doors stop being
+ * separable.
+ */
+export async function recoveryCandidates(
+  ctx: AuthContext, db: Db,
+): Promise<Array<{ id: string; full_name: string; unit_label: string | null }>> {
+  require_(ctx.role, 'phone.change');
+  const r = await db.prepare(
+    `SELECT p.id, p.full_name,
+            (SELECT b.name_ar || ' — ' || u.unit_number
+               FROM unit_owners uo
+               JOIN units u ON u.id = uo.unit_id
+               JOIN buildings b ON b.id = u.building_id
+              WHERE uo.profile_id = p.id AND uo.valid_to IS NULL
+              LIMIT 1) AS unit_label
+       FROM profiles p
+      WHERE p.is_active = 1
+        AND p.id <> ?
+        AND EXISTS (SELECT 1 FROM passkeys k
+                     WHERE k.profile_id = p.id AND k.revoked_at IS NULL)
+      ORDER BY p.full_name
+      LIMIT 500`
+  ).bind(ctx.personId).all<{ id: string; full_name: string; unit_label: string | null }>();
+  return r.results ?? [];
 }
 
 /* ===================================================================== */
@@ -404,4 +475,61 @@ export async function issueFirstActivation(
     fullName: p.full_name,
     expiresAt: expiresAt?.expires_at ?? '',
   };
+}
+
+/**
+ * Issue the activation link that FOLLOWS a fulfilled recovery.
+ *
+ * Deliberately not `issueFirstActivation` with a different name. That function
+ * exists to refuse anyone holding a passkey, which is the boundary keeping an
+ * admin from minting a credential onto a live account; reusing it here would
+ * work only because `fulfilRecovery` has just revoked every passkey, and the
+ * next person to relax that guard would silently reopen the hole.
+ *
+ * This one demands the opposite proof: a recovery request for this person that
+ * two admins signed and that has been fulfilled. Without it, nothing. The
+ * challenge is recorded with `purpose='recovery'`, so the audit trail says
+ * which door the credential came through — «إزاي ده اتفعّل» has one answer per
+ * account, and both answers are on the record.
+ */
+export async function issueRecoveryActivation(
+  ctx: AuthContext, db: Db, profileId: Id, sha256: (s: string) => Promise<string>,
+  randomToken: () => string, now: Clock,
+): Promise<{ token: string; fullName: string; expiresAt: string }> {
+  require_(ctx.role, 'phone.change');
+
+  const p = await db.prepare(
+    `SELECT p.full_name,
+            (SELECT COUNT(*) FROM passkeys k
+              WHERE k.profile_id = p.id AND k.revoked_at IS NULL)   AS passkeys,
+            (SELECT COUNT(*) FROM recovery_requests rr
+              WHERE rr.target_profile_id = p.id
+                AND rr.fulfilled_at IS NOT NULL
+                AND rr.approved_by IS NOT NULL)                     AS fulfilled
+       FROM profiles p WHERE p.id = ? AND p.is_active = 1`
+  ).bind(profileId).first<{ full_name: string; passkeys: number; fulfilled: number }>();
+  if (!p) throw new NotFound('العضو ده مش موجود');
+
+  if (p.fulfilled === 0) {
+    throw new Forbidden('phone.change',
+      'مفيش طلب استرجاع متنفّذ للشخص ده. افتح طلب، وخلي أدمن تاني يوافق، وبعدين نفّذه.');
+  }
+  if (p.passkeys > 0) {
+    // fulfilRecovery revokes every passkey in the same batch as the fulfilment,
+    // so a live one here means a device was enrolled AFTER it — the link was
+    // already used, and issuing a second one would hand out a second way in.
+    throw new Forbidden('phone.change',
+      'الشخص ده سجّل جهاز خلاص بعد الاسترجاع. لو ضاع تاني، افتح طلب استرجاع جديد.');
+  }
+
+  const token = randomToken();
+  await createActivationChallenge(ctx, db, profileId, await sha256(token), 'recovery', now);
+
+  const expiresAt = await db.prepare(
+    `SELECT expires_at FROM activation_challenges
+      WHERE profile_id = ? AND consumed_at IS NULL
+      ORDER BY created_at DESC LIMIT 1`
+  ).bind(profileId).first<{ expires_at: string }>();
+
+  return { token, fullName: p.full_name, expiresAt: expiresAt?.expires_at ?? '' };
 }

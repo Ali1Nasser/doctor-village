@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#0E5C63">
-<title>دفع جديد — بوابة قرية الأطباء</title>
+<title>حسابي — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -417,7 +417,7 @@ header .htext{flex:1;min-inline-size:0}
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
 </style>
-<script>const MSG={"compressing":"بنصغّر الصورة عشان ترفع بسرعة…","ready":"تأكيد","tooBig":"الصورة كبيرة شوية، ممكن تجرّب صورة تانية؟","failed":"جرّب تاني، ولو فضل كلّم الإدارة.","working":"ثانية واحدة…","submit":"تأكيد الإرسال","needImage":"لازم صورة التحويل عشان الإدارة تقدر تراجع"};</script>
+
 </head>
 <body>
 <a class="skip" href="#main">تخطّي للمحتوى</a>
@@ -425,7 +425,7 @@ header .htext{flex:1;min-inline-size:0}
   <details class="drawer">
   <summary aria-label="افتح القائمة" title="القائمة"><span aria-hidden="true">☰</span></summary>
   <nav class="drawer-panel" aria-label="القائمة">
-    <div class="dgroup"><h2>حسابي وفلوسي</h2><a href="/" ><span class="ico" aria-hidden="true">🏠</span><span>الرئيسية</span></a><a href="/me" ><span class="ico" aria-hidden="true">👤</span><span>حسابي</span></a><a href="/pay" ><span class="ico" aria-hidden="true">💳</span><span>دفع جديد</span></a><a href="/payments" ><span class="ico" aria-hidden="true">🧾</span><span>إيصالاتي</span></a><a href="/notifications" ><span class="ico" aria-hidden="true">🔔</span><span>رسايلي</span></a></div><div class="dgroup"><h2>القرية</h2><a href="/finance" ><span class="ico" aria-hidden="true">💰</span><span>فلوس القرية</span></a><a href="/finance/units" ><span class="ico" aria-hidden="true">🏢</span><span>حالة السداد لكل عمارة</span></a><a href="/map" ><span class="ico" aria-hidden="true">🗺️</span><span>خريطة القرية</span></a><a href="/news" ><span class="ico" aria-hidden="true">📣</span><span>أخبار القرية</span></a><a href="/albums" ><span class="ico" aria-hidden="true">📸</span><span>ألبومات الأعمال</span></a><a href="/maintenance" ><span class="ico" aria-hidden="true">🛠️</span><span>بلاغات الصيانة</span></a><a href="/search" ><span class="ico" aria-hidden="true">🔎</span><span>دوّر في كل حاجة</span></a></div>
+    <div class="dgroup"><h2>حسابي وفلوسي</h2><a href="/" ><span class="ico" aria-hidden="true">🏠</span><span>الرئيسية</span></a><a href="/me" aria-current="page"><span class="ico" aria-hidden="true">👤</span><span>حسابي</span></a><a href="/pay" ><span class="ico" aria-hidden="true">💳</span><span>دفع جديد</span></a><a href="/payments" ><span class="ico" aria-hidden="true">🧾</span><span>إيصالاتي</span></a><a href="/notifications" ><span class="ico" aria-hidden="true">🔔</span><span>رسايلي</span></a></div><div class="dgroup"><h2>القرية</h2><a href="/finance" ><span class="ico" aria-hidden="true">💰</span><span>فلوس القرية</span></a><a href="/finance/units" ><span class="ico" aria-hidden="true">🏢</span><span>حالة السداد لكل عمارة</span></a><a href="/map" ><span class="ico" aria-hidden="true">🗺️</span><span>خريطة القرية</span></a><a href="/news" ><span class="ico" aria-hidden="true">📣</span><span>أخبار القرية</span></a><a href="/albums" ><span class="ico" aria-hidden="true">📸</span><span>ألبومات الأعمال</span></a><a href="/maintenance" ><span class="ico" aria-hidden="true">🛠️</span><span>بلاغات الصيانة</span></a><a href="/search" ><span class="ico" aria-hidden="true">🔎</span><span>دوّر في كل حاجة</span></a></div>
   </nav>
 </details>
   <div class="htext">
@@ -436,13 +436,13 @@ header .htext{flex:1;min-inline-size:0}
     <a class="hbtn" href="/search" aria-label="دوّر في كل حاجة" title="دوّر في كل حاجة"><span aria-hidden="true">🔎</span></a><a class="hbtn" href="/notifications" aria-label="رسايلي" title="رسايلي"><span aria-hidden="true">🔔</span></a>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="/pay/3">
+      <input type="hidden" name="next" value="/me">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="/pay/3">
+      <input type="hidden" name="next" value="/me">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -452,8 +452,8 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
-  <a href="/payments" aria-current="page"><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
+  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
   <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
   <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
@@ -464,30 +464,50 @@ header .htext{flex:1;min-inline-size:0}
 
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
-<div class="steps" role="progressbar" aria-valuenow="3" aria-valuemin="1" aria-valuemax="5"
-     aria-label="خطوة 3 من 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></div>
 <div class="card">
-  <h2 style="margin-block-start:0">دفعت إزاي؟</h2>
+  <h2 style="margin-block-start:0">👤 د. عمرو شاهين</h2>
+  <p class="muted">بياناتك، أجهزتك، وطريقة دخولك</p>
   
-  <form method="post" action="/pay/3">
-    <div class="grid-cats">
-      <button class="cat" type="submit" name="method" value="instapay">
-           <span aria-hidden="true">📱</span>إنستا باي</button><button class="cat" type="submit" name="method" value="bank_transfer">
-           <span aria-hidden="true">🏦</span>تحويل بنكي</button><button class="cat" type="submit" name="method" value="vodafone_cash">
-           <span aria-hidden="true">📲</span>فودافون كاش</button><button class="cat" type="submit" name="method" value="cash">
-           <span aria-hidden="true">💵</span>كاش</button>
-    </div>
-    <div class="field" style="margin-block-start:16px">
-      <label for="tdate">تاريخ التحويل</label>
-      <input id="tdate" name="transfer_date" type="date" required
-             value="">
-    </div>
-    <div class="card">
-      <strong>بيانات التحويل</strong>
-      <div class="banner warn" style="margin-block-end:0">الإدارة لسه محطتش بيانات التحويل. كلّمهم قبل ما تحوّل.</div>
-    </div></form>
+  
+  <div class="row">
+    <span class="ico" aria-hidden="true">🛡️</span>
+    <span class="row-body"><b>الدور</b><span class="muted">ساكن</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🏢</span>
+    <span class="row-body"><b>الوحدة</b>
+      <span class="muted">عمارة 14 — 5</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">📱</span>
+    <span class="row-body"><b>رقم الموبايل</b>
+      <span class="muted"><bdi dir="ltr" class="num">••••010</bdi></span>
+      <span class="muted">متسجّل عندنا ومش بيظهر لحد غير الإدارة</span></span>
+  </div>
 </div>
-<a class="btn btn-2" href="/pay/2">← رجوع</a>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🔑 الأجهزة المسجّلة</h3>
+  <p class="hint">كل جهاز دخلت منه ببصمتك. لو فيه جهاز مش بتاعك بلّغ الإدارة فورًا.</p>
+  <div class="empty"><div class="big" aria-hidden="true">🔑</div><p>مفيش أجهزة مسجّلة</p><p class="muted">هتظهر هنا أول ما تفعّل بصمة على جهاز.</p></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">💰 فلوسي</h3>
+  <div class="btn-row">
+    <a class="btn btn-2" href="/payments">إيصالاتي</a>
+    <a class="btn btn-2" href="/payments/statement">حمّل كشف حساب السنة (PDF)</a>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🎛️ العرض</h3>
+  <p class="hint">حجم الخط والوضع الليلي بيتظبطوا من فوق، وبيتحفظوا على الجهاز ده.</p>
+  <form method="post" action="/me/sessions/revoke">
+    <p class="hint">بيسجّل خروجك من كل الأجهزة، بما فيها ده.</p>
+    <button class="btn btn-2" type="submit">اقفل كل الجلسات</button>
+  </form>
+</div>
 </main>
 </div>
 

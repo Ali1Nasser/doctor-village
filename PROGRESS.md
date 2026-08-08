@@ -10,10 +10,46 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~640 checks green** (107 unit · 387 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · 37 screens · 0 WCAG violations). Live on Cloudflare with all 24 migrations applied to real D1. |
-| **Last updated** | 2026-08-08 (session 28) |
+| **Status** | 🟢 **~660 checks green** (107 unit · 407 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 42 pages**). Live on Cloudflare with all 24 migrations applied to real D1. |
+| **Last updated** | 2026-08-08 (session 29) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 29 — the four screens that had no door
+
+The owner asked for the sandbox prototype's interface, "with enhancements". Rebuilding the shell
+(sticky app bar, a no-JS `<details>` drawer, KPI queue cards, the inverted treasury card) was the
+visible half. Walking the sandbox's navigation against the app's route table was the half that
+mattered: **four of its destinations had no route at all**, and two of them were whole procedures
+with a tested data layer and no way in.
+
+- **`/me` — حسابي.** Passkeys are this product's entire authentication story, so an enrolled device
+  the owner does not recognise is the only visible symptom of a compromised account. There was
+  nowhere to look, and no way to revoke one.
+- **`/admin/ledger` — دفتر القيود.** `/finance` answers *how much*; nothing answered *on what basis*.
+  The journal could only be read with `sqlite3` against production. Paged 25 at a time — the demo's
+  250 entries rendered as one 17,000-pixel wall before that.
+- **`/admin/import` — استيراد سجل الملّاك.** `lib/import/owners.ts` and `commitImport` have parsed
+  and committed owner registers since CP-2, behind three JSON endpoints. So the real path to 204
+  accounts was "send the Excel file to the developer" — the exact failure this product exists to end.
+- **`/admin/recoveries` — الاستعادة والتفعيل.** Two-admin assisted recovery, identity check, session
+  and passkey revocation: all built, all tested, all unreachable. The one procedure for *"my phone
+  was stolen and my account holds a year of payments"* could not be run by the board it was written
+  for.
+
+Also: **the demo's `audit_log` was empty**, so «سجل التغييرات» — the screen the board is being asked
+to trust — rendered its empty state, and the dashboard's activity strip could not appear. The seed
+now records every state change it fabricates (592 rows) with the same action slugs `mutations.ts`
+writes. And a board member who owns no flat was greeted with «عمارة — شقة —» above «إجمالي المطلوب
+منك 0.00» and a «دفع جديد» button: three statements, each false about them, on the first screen they
+see.
+
+`tests/access/onboarding_ui.test.ts` (9 tests) drives both new procedures as real HTTP forms and
+then asserts against the **database** — a 200 from a confirm button that created nothing is exactly
+the failure that would otherwise have shipped. It proves one admin cannot complete a recovery alone,
+and that the stolen phone's cookie stops working.
+
+---
 
 ### What changed in session 28 — the specification was not the specification
 
@@ -75,7 +111,7 @@ backup, all of which had been writing a state the application can never reach.
 |---|---|---|---|---|
 | 0 | Discovery & contracts | 🟢 done | 3/4 | Q19/Q20 answered 2026-08-04. Outstanding: written board sign-off on the category taxonomy |
 | 1 | Data foundation & security | 🟢 nearly done | 6/8 | **Access-test gate MET (20/20 over HTTP).** Outstanding: real D1 verification, CI |
-| 2 | Authentication | 🟢 nearly done | 5/8 | Passkeys, activation, printed-code recovery, **two-admin assisted recovery**, **bulk import**. The 3 open gates all need a **real phone against a real origin** or a real deployment — none can be closed from this sandbox. No passkey listing/revocation screen yet |
+| 2 | Authentication | 🟢 nearly done | 6/8 | Passkeys, activation, printed-code recovery, **two-admin assisted recovery**, **bulk import** — and as of session 29 all three have SCREENS (`/me`, `/admin/import`, `/admin/recoveries`), so the procedures are reachable by the board rather than by a developer with `curl`. `/me` lists enrolled devices and revokes one. The 2 open gates need a **real phone against a real origin** — neither can be closed from this sandbox |
 | 3 | Read-only transparency | 🟢 **gates met** | 2/2 | `/finance`, `/finance/units`, `/admin/health` built. Rendered figures verified against hand-computed literals **and** against raw SQL. **Found and fixed a real arrears bug (R-043).** Outstanding: a period filter, before year two |
 | 4 | Payments | 🟢 nearly done | 3/6 | Wizard, upload, duplicate warning, review queue, idempotent posting, **reversal**, decision notifications. The 3 open gates need a **real phone on a real network** — nothing else. *(Ticked 2026-08-05 after finding the boxes had drifted from the code for several sessions.)* |
 | 5 | Expenses & fees | 🟢 **gates met** | 8/8 | Record → countersign → post → reverse from a phone with no JS · invoice photo · **fee periods & dues generation** (`/admin/fees`, draft→distribute→publish, amounts frozen at publication by 0022) · **reconciliation, credits and period close** (`/admin/settlements`) · categories, roles, settings, staff, audit. Outstanding: monthly statement snapshots |
@@ -87,6 +123,43 @@ backup, all of which had been writing a state the application can never reach.
 
 ## Work log
 *Newest first. One entry per work block.*
+
+### [2026-08-08] — session 29 · the sandbox interface, and the four screens behind it
+**Owner:** *"get all the features, GUI, UIUX from the HTML pages zip and integrated in the app, and
+make the GUI and UIUX similar to `qaryat_atebaa_full_sandbox_v3-1.html` with enhancements."*
+
+**Built:** the app shell (sticky bar with avatar/name/role, a `<details>` drawer with four grouped
+sections and `aria-current`, KPI queue cards driven by real counts, the inverted treasury card with
+its income/expense line, latest announcements, an activity timeline) · **`/me`** · **`/admin/ledger`**
+(paged) · **`/admin/import`** · **`/admin/recoveries`** · `lib/db/onboarding.ts`'s
+`recoveryCandidates` and `issueRecoveryActivation` · a 592-row audit trail in the demo seed
+(`005_audit.sql`) · `tests/access/onboarding_ui.test.ts`.
+
+**Four things worth carrying forward:**
+
+1. **A screen with no route is indistinguishable from a missing feature — and the tests cannot tell
+   you which.** `requestRecovery`/`approveRecovery`/`fulfilRecovery` were fully tested and entirely
+   unreachable. This is the same lesson as session 28's `/admin/review/:id`, arriving a second time
+   from a different direction: *the check that finds it is to name the sequence of taps from the
+   login screen and drive exactly that.* Walking a prototype's navigation against the route table
+   found four instances in an afternoon.
+2. **An empty audit log in a demo about accountability is not a neutral omission.** It is the screen
+   that proves nothing happens behind anyone's back, showing nothing. The seed now writes the trail
+   its own fabricated history implies — including that the 200 residents arrived as ONE reviewed
+   import (two rows naming one person) rather than 200 silent inserts, because that is what the
+   product actually does.
+3. **`issueRecoveryActivation` is deliberately not `issueFirstActivation` renamed.** The latter
+   exists to *refuse* anyone holding a passkey — that refusal is the boundary stopping an admin from
+   minting a credential onto a live account. Reusing it after a fulfilment would work only because
+   the passkeys were just revoked, and the next person to relax the guard would silently reopen the
+   hole. The new function demands the opposite proof: a two-admin recovery that was fulfilled.
+4. **Every scrollable region needs `tabindex="0"`.** The audit table grew past the viewport once the
+   demo had rows in it, and axe failed the build on `scrollable-region-focusable` — a region that
+   scrolls but cannot be focused is unreachable to anyone without a pointer.
+
+**Two visible defects the screenshots found, not the tests:** a board member owning no flat was told
+they owe 0.00 ج.م on a flat named «عمارة — شقة —», and the last control on the longest screen sat one
+pixel under the floating help bubble (`main`'s bottom padding cleared the tab bar but not the FAB).
 
 ### [2026-08-05] — session 24 · closing the two gaps I made last session
 **Owner:** *"Continue"* — both were named in session 23's self-critique.
@@ -1537,10 +1610,12 @@ equation is a tautology and is demoted).
 ("Learned during the build") → `RISKS.md` (R-028 onward).
 
 **One command tells you if it still works:** `npm run verify` →
-**436 checks, 0 failures.** That is 2 lint rules + typecheck + 89 unit + 263 HTTP
-access/audit/auth/onboarding/transparency/views + 48 schema + 34 ledger-invariant checks + 14 screens
-rendered. If it is green, the security and money layers are intact. **It has never run in CI —
-there is none.**
+**~660 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
+access/audit/auth/onboarding/transparency/views + 48 ledger invariants + 34 demo checks + 12
+restore-drill checks + **41 screens rendered** + an axe-core WCAG 2.2 AA pass over all of them.
+If it is green, the security and money layers are intact. **It has never run in CI — there is
+none.** (`npm run a11y` needs `npm i -D playwright axe-core`; without them it SKIPS rather than
+fails, so a green verify with no axe line is not an accessibility pass.)
 
 **What exists and runs:**
 `migrations/0001`–`0019` (**49 tables / 22 views / 42 triggers**, every table `STRICT`) ·
@@ -1553,8 +1628,13 @@ there is none.**
 
 **A resident can, today:** log in with a passkey → see their balance → walk a five-step payment
 wizard that survives switching to the bank app → upload a receipt → have it reviewed by someone who
-is not themselves. **An admin can:** review payments, record expenses (countersigned by a second
-person), import the owner register, and — with a *second* admin — recover a locked-out resident.
+is not themselves → open `/me` and see which devices can open their account, and revoke one.
+**An admin can:** review and POST payments, record expenses (countersigned by a second person),
+open and publish a subscription year, close a period, publish news, run the village map, read the
+journal entry by entry at `/admin/ledger`, **import the owner register from a screen**
+(`/admin/import` — paste or upload, preview, then confirm), and — with a *second* admin —
+**recover a locked-out resident from a screen** (`/admin/recoveries`), which revokes every device
+and hands over one fresh activation link.
 
 **⚠️ Three things a stranger must not misread:**
 1. **Every figure in `seed/demo/` and `preview/` is invented** (A-13…A-19, R-037). The 746,450.00

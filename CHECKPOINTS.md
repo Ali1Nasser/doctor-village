@@ -105,17 +105,23 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 ## CP-2 — Authentication
 *Goal: every role can log in with a phone number, and nobody else can.*
 
-- [~] **WebAuthn passkey enrollment, authentication, listing, labelling, and revocation** —
+- [x] **WebAuthn passkey enrollment, authentication, listing, labelling, and revocation** —
       enrollment + authentication + clone detection done and tested; the credential carries
-      `device_label_ar` at enrollment, but there is **no listing screen and no revocation path
-      yet**. A resident who sells a phone currently cannot retire its passkey.
+      `device_label_ar` at enrollment, and **`/me` lists a person's enrolled devices and revokes
+      one** (2026-08-08). Revoking the last device is allowed and its cost is stated: silently
+      refusing leaves somebody who believes their account is compromised with no way to close it.
 - [x] `lib/auth/channel.ts` + `ConsoleChannel` — plus `BoardLinkChannel` (now PRIMARY per
       ADR-016) and `PrintedCodeChannel`. `WhatsAppInboundChannel` present but **disabled**
 - [x] First-activation flow: ~~inbound WhatsApp token~~ **board-issued link** (ADR-016) → verify
       → **enroll passkey** → issue printed recovery codes
 - [x] Printed single-use recovery codes; two-admin assisted recovery —
       `migrations/0010`, `lib/db/onboarding.ts`, 21 tests in `tests/access/onboarding.test.ts`.
-      The two-admin rule is a `CHECK` constraint, not application code.
+      The two-admin rule is a `CHECK` constraint, not application code. **`/admin/recoveries` is
+      the screen** (2026-08-08); before it the flow was JSON-only, which meant a procedure the
+      board could not run. `tests/access/onboarding_ui.test.ts` drives it as forms and proves one
+      admin cannot finish alone and that the lost phone's session dies.
+- [x] **Owner-register import from a screen** — `/admin/import` (2026-08-08). Upload or paste,
+      preview that creates nothing, then a separate confirm. Same tests, same file.
 - [x] Login UI per `04_UX_SPEC.md` §3 — "الدخول ببصمة أو قفل الموبايل" (screen renders; the
       WebAuthn call behind the button is still to come)
 - [x] Session middleware, route guards, `lib/rbac.ts` as the single source of permission truth

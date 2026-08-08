@@ -24,6 +24,7 @@ import { page, t, msg, esc, num, money, arDate } from './layout.js';
 import type { FeePeriodRow, DueRow } from '../../lib/db/fees.js';
 import type {
   CategoryRow, PersonRow, SettingsRow, StaffRow, AuditRow,
+  MyAccount, JournalEntryRow, JournalLineRow,
 } from '../../lib/db/admin.js';
 
 /** Same shape as `layout.emptyState`, with a second explanatory line and no
@@ -205,7 +206,7 @@ export function feeDuesPage(d: {
 <div class="card">
   ${d.dues.length === 0
     ? empty('🏠', t.fees.empty, t.fees.emptyHint)
-    : `<div class="table-wrap"><table>
+    : `<div class="table-wrap" tabindex="0"><table>
     <thead><tr>
       <th>${esc(t.fees.unit)}</th><th>${esc(t.fees.owner)}</th><th>${esc(t.fees.due)}</th>
       <th>${esc(t.fees.waived)}</th><th>${esc(t.fees.paid)}</th><th></th>
@@ -556,7 +557,7 @@ ${d.canEdit ? `
  * the slug: an action nobody translated is still worth showing, and showing it
  * raw makes the gap obvious rather than hiding the row.
  */
-const ACTION_AR: Record<string, string> = {
+export const ACTION_AR: Record<string, string> = {
   'payment.review': 'راجع إيصال',
   'payment.reverse': 'ألغى إيصال',
   'payment.submit': 'قدّم إيصال',
@@ -592,6 +593,30 @@ const ACTION_AR: Record<string, string> = {
   'post.retract': 'سحب خبر',
 };
 
+/** An action slug rendered in Arabic. Exported because the dashboard's activity
+ *  feed shows the same events and must not invent a second vocabulary. */
+export function auditActionAr(action: string): string {
+  return ACTION_AR[action] ?? action;
+}
+
+/**
+ * The table a row acted on, in Arabic.
+ *
+ * The column printed `payments`, `expenses`, `import_batches` — table names, to
+ * a board of doctors reading an accountability screen. A log nobody can read is
+ * not a log; the English name is kept only where no Arabic word exists, which
+ * is a bug report, not a design.
+ */
+const ENTITY_AR: Record<string, string> = {
+  payments: 'إيصال', expenses: 'مصروف', journal_entries: 'قيد', profiles: 'حساب',
+  fee_periods: 'اشتراك', unit_dues: 'مستحق وحدة', categories: 'بند',
+  staff: 'موظف', posts: 'خبر', settings: 'إعدادات', sessions: 'جلسات',
+  passkeys: 'جهاز', import_batches: 'استيراد ملّاك', recovery_requests: 'طلب استرجاع',
+  delegates: 'تفويض', phone_identifiers: 'رقم موبايل', albums: 'ألبوم',
+  maintenance_tickets: 'بلاغ صيانة', reconciliations: 'مطابقة بنكية',
+  map_features: 'الخريطة', resident_credits: 'رصيد مالك',
+};
+
 export function auditPage(d: { rows: AuditRow[] }): string {
   return page({ title: t.auditView.title, active: 'home' }, `
 <div class="card">
@@ -602,7 +627,7 @@ export function auditPage(d: { rows: AuditRow[] }): string {
 <div class="card">
   ${d.rows.length === 0
     ? empty('📜', t.auditView.empty, t.auditView.emptyHint)
-    : `<div class="table-wrap"><table>
+    : `<div class="table-wrap" tabindex="0"><table>
     <thead><tr>
       <th>${esc(t.auditView.when)}</th><th>${esc(t.auditView.who)}</th>
       <th>${esc(t.auditView.what)}</th><th>${esc(t.auditView.onWhat)}</th>
@@ -612,7 +637,7 @@ export function auditPage(d: { rows: AuditRow[] }): string {
         <td>${arDate(r.created_at)}</td>
         <td>${esc(r.actor_name ?? '—')}<br><span class="muted">${esc(ROLE_AR[r.actor_role] ?? r.actor_role)}</span></td>
         <td>${esc(ACTION_AR[r.action] ?? r.action)}</td>
-        <td><span class="muted">${esc(r.entity_table)}</span></td>
+        <td><span class="muted">${esc(ENTITY_AR[r.entity_table] ?? r.entity_table)}</span></td>
       </tr>`).join('')}</tbody>
   </table></div>`}
 </div>`);
@@ -847,4 +872,460 @@ export function helpPage(d: {
 <div class="card">
   <div class="banner info" style="margin-block:0">🔒 ${esc(t.help.safety)}</div>
 </div>`);
+}
+
+/* ===================================================================== */
+/* /me                                                                   */
+/* ===================================================================== */
+
+/**
+ * The one screen that answers "which devices can open my account?".
+ *
+ * Passkeys are the entire authentication story here, so an enrolled device the
+ * owner does not recognise is the only visible symptom of a compromised
+ * account — and until now there was nowhere to look. That is the reason this
+ * page exists; the name and unit are context, not the point.
+ *
+ * Revoking the LAST device is allowed and warned about in the same breath,
+ * because the alternative — silently refusing — leaves somebody who believes
+ * their account is compromised with no way to close it. The warning names the
+ * consequence: they will need a fresh activation link from the board.
+ */
+export function mePage(d: {
+  me: MyAccount;
+  roleAr: string;
+  flash?: string;
+  error?: string;
+}): string {
+  const only = d.me.devices.length === 1;
+  return page({ title: t.me.title, active: 'home' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">👤 ${esc(d.me.full_name)}</h2>
+  <p class="muted">${esc(t.me.subtitle)}</p>
+  ${d.error ? banner('warn', d.error) : ''}
+  ${d.flash ? banner('ok', d.flash) : ''}
+  <div class="row">
+    <span class="ico" aria-hidden="true">🛡️</span>
+    <span class="row-body"><b>${esc(t.me.role)}</b><span class="muted">${esc(d.roleAr)}</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🏢</span>
+    <span class="row-body"><b>${esc(t.me.unit)}</b>
+      <span class="muted">${esc(d.me.unit_label ?? '—')}</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">📱</span>
+    <span class="row-body"><b>${esc(t.me.phone)}</b>
+      <span class="muted">${d.me.phone_masked ? num(d.me.phone_masked) : '—'}</span>
+      <span class="muted">${esc(t.me.phoneHidden)}</span></span>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🔑 ${esc(t.me.devices)}</h3>
+  <p class="hint">${esc(t.me.devicesHint)}</p>
+  ${d.me.devices.length === 0
+    ? empty('🔑', t.me.noDevices, t.me.noDevicesHint)
+    : d.me.devices.map(k => `
+    <div class="row">
+      <span class="ico" aria-hidden="true">📱</span>
+      <span class="row-body">
+        <b>${esc(k.device_label_ar)}</b>
+        <span class="muted">${esc(t.me.added)} ${arDate(k.created_at)}${
+          k.last_used_at ? ` · ${esc(t.me.lastUsed)} ${arDate(k.last_used_at)}` : ''}</span>
+      </span>
+      <span class="row-end">
+        <details>
+          <summary class="btn btn-2 btn-sm">${esc(t.me.revoke)}</summary>
+          <p class="hint">${esc(only ? t.me.lastDevice : t.me.revokeHint)}</p>
+          <form method="post" action="/me/devices/${esc(k.id)}/revoke">
+            <button class="btn btn-danger" type="submit">${esc(t.me.revoke)}</button>
+          </form>
+        </details>
+      </span>
+    </div>`).join('')}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">💰 ${esc(t.me.myMoney)}</h3>
+  <div class="btn-row">
+    <a class="btn btn-2" href="/payments">${esc(t.nav.myPayments)}</a>
+    <a class="btn btn-2" href="/payments/statement">${esc(t.payments.downloadStatement)}</a>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🎛️ ${esc(t.me.prefs)}</h3>
+  <p class="hint">${esc(t.me.prefsHint)}</p>
+  <form method="post" action="/me/sessions/revoke">
+    <p class="hint">${esc(t.me.signOutAllHint)}</p>
+    <button class="btn btn-2" type="submit">${esc(t.me.signOutAll)}</button>
+  </form>
+</div>`);
+}
+
+/* ===================================================================== */
+/* /admin/ledger — دفتر القيود                                            */
+/* ===================================================================== */
+
+const SOURCE_AR: Record<string, string> = {
+  payment: t.ledger.sourcePayment, expense: t.ledger.sourceExpense,
+  adjustment: t.ledger.sourceAdjustment, opening_balance: t.ledger.sourceOpening,
+  refund: t.ledger.sourceRefund, waiver: t.ledger.sourceWaiver,
+  reclassification: t.ledger.sourceReclass,
+};
+
+/**
+ * The journal, with each entry's lines one tap away.
+ *
+ * `/finance` answers "how much"; this answers "on what basis". A board asked to
+ * approve last year's accounts needs to open the actual entries, and a
+ * treasurer defending a figure needs to point at one — neither was possible
+ * from the product, so the ledger existed and could only be read with
+ * `sqlite3`.
+ *
+ * The lines live in a `<details>` per entry rather than on a second screen:
+ * the question is almost always "what were the two sides of THIS one", and a
+ * round trip per entry turns a five-minute review into an afternoon.
+ */
+export function ledgerPage(d: {
+  entries: JournalEntryRow[];
+  lines: Record<string, JournalLineRow[]>;
+  /** Paging, because a year of a 204-flat village is ~250 entries and a screen
+   *  that renders all of them is a seventeen-thousand-pixel wall nobody scrolls
+   *  to the bottom of. `<a>` links, not script: the page number is in the URL,
+   *  so a treasurer can send «الصفحة اللي فيها القيد ده» to another board
+   *  member. */
+  total: number;
+  offset: number;
+  limit: number;
+}): string {
+  const entry = (e: JournalEntryRow) => {
+    const ls = d.lines[e.id] ?? [];
+    const dr = ls.reduce((n, l) => n + l.debit_piastres, 0);
+    const cr = ls.reduce((n, l) => n + l.credit_piastres, 0);
+    return `
+  <details class="card" style="border-inline-start:5px solid ${
+    e.posted_at ? 'var(--ok)' : 'var(--warn)'}">
+    <summary class="summary-btn">
+      <span class="row-body">
+        <b>${num(e.entry_no)} — ${esc(e.description_ar)}</b>
+        <span class="muted">${arDate(e.entry_date)} · ${
+          esc(SOURCE_AR[e.source_type] ?? e.source_type)} · ${money(e.amount_piastres)}</span>
+      </span>
+      <span class="row-end">
+        ${e.is_reversal ? `<span class="chip warn">↩️ ${esc(t.ledger.reversal)}</span>` : ''}
+        <span class="chip ${e.posted_at ? 'ok' : 'warn'}">${
+          esc(e.posted_at ? t.ledger.posted : t.ledger.unposted)}</span>
+      </span>
+    </summary>
+    <div class="table-wrap" tabindex="0"><table>
+      <thead><tr>
+        <th>${esc(t.ledger.account)}</th><th>${esc(t.ledger.debit)}</th>
+        <th>${esc(t.ledger.credit)}</th><th>${esc(t.ledger.against)}</th>
+      </tr></thead>
+      <tbody>
+        ${ls.map(l => `
+        <tr>
+          <td>${num(l.account_code)} ${esc(l.account_name)}
+            ${l.memo_ar ? `<br><span class="muted">${esc(l.memo_ar)}</span>` : ''}</td>
+          <td>${l.debit_piastres ? money(l.debit_piastres) : '—'}</td>
+          <td>${l.credit_piastres ? money(l.credit_piastres) : '—'}</td>
+          <td class="muted">${esc(l.unit_label ?? l.fund_name ?? '—')}</td>
+        </tr>`).join('')}
+        <tr>
+          <td><b>${esc(t.ledger.balanced)}</b></td>
+          <td><b>${money(dr)}</b></td>
+          <td><b>${money(cr)}</b></td>
+          <td>${dr === cr ? '✅' : '⚠️'}</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>`;
+  };
+
+  const from = d.total === 0 ? 0 : d.offset + 1;
+  const to = Math.min(d.offset + d.limit, d.total);
+  const pager = `
+<div class="card btn-row">
+  ${d.offset > 0
+    ? `<a class="btn btn-2" href="/admin/ledger?offset=${Math.max(d.offset - d.limit, 0)}">${
+        esc(t.ledger.newer)}</a>` : ''}
+  ${to < d.total
+    ? `<a class="btn btn-2" href="/admin/ledger?offset=${d.offset + d.limit}">${
+        esc(t.ledger.older)}</a>` : ''}
+</div>`;
+
+  return page({ title: t.ledger.title, active: 'finance' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">📚 ${esc(t.ledger.title)}</h2>
+  <p class="muted">${esc(t.ledger.subtitle)}</p>
+  <p class="muted">${msg(t.ledger.showing, {
+    from: String(from), to: String(to), total: String(d.total) })}</p>
+  <div class="banner info">${esc(t.ledger.immutable)}</div>
+</div>
+
+${d.entries.length === 0
+  ? `<div class="card">${empty('📚', t.ledger.empty, t.ledger.emptyHint)}</div>`
+  : d.entries.map(entry).join('') + pager}`);
+}
+
+/* ===================================================================== */
+/* /admin/import — استيراد سجل الملّاك                                     */
+/* ===================================================================== */
+
+/**
+ * The owner register, imported from the product instead of from a terminal.
+ *
+ * `lib/import/owners.ts` and `lib/db/onboarding.ts` have parsed, staged and
+ * committed owner registers since CP-2 — behind three JSON endpoints. A board
+ * secretary holding the village's only copy of the register in an Excel file
+ * could not use any of it, so the real path to 204 accounts was "send the file
+ * to the developer", which is the failure mode the whole product exists to end.
+ *
+ * Two steps, never one: parse-and-show, then confirm. The screen states in the
+ * banner that nothing has happened yet, because the thing an admin fears at
+ * this moment is having already done something irreversible to 204 records.
+ * Rows the parser could not read are listed separately with what to fix — they
+ * are skipped, never guessed at (R-009).
+ *
+ * File input AND a paste box: «حفظ باسم CSV» is a step some people will not
+ * find, and copying the rows straight out of Excel is the fallback that always
+ * works. Both post to the same place.
+ */
+export function importPage(d: {
+  batch?: {
+    id: string;
+    okCount: number;
+    problemCount: number;
+    unmappedHeaders: string[];
+    rows: Array<{
+      rowNo: number; fullName: string | null; buildingCode: string | null;
+      unitNumber: string | null; phoneE164: string | null;
+      status: string; problemAr: string | null;
+    }>;
+  };
+  outcome?: { created: number; skipped: number; buildings: number; units: number };
+  error?: string;
+}): string {
+  const ok = d.batch?.rows.filter(r => r.status === 'ok') ?? [];
+  const bad = d.batch?.rows.filter(r => r.status !== 'ok') ?? [];
+
+  return page({ title: t.importPage.title, active: 'home' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">📥 ${esc(t.importPage.title)}</h2>
+  <p class="muted">${esc(t.importPage.subtitle)}</p>
+  ${d.error ? banner('warn', d.error) : ''}
+  <p class="hint">${esc(t.importPage.how)}</p>
+
+  <!-- multipart because a file is the common case; the textarea is the same
+       field by another route, and the server takes whichever arrived. -->
+  <form method="post" action="/admin/import" enctype="multipart/form-data">
+    <div class="field">
+      <label for="imp-file">${esc(t.importPage.fileLabel)}</label>
+      <input id="imp-file" name="file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain">
+      <p class="hint">${esc(t.importPage.fileHint)}</p>
+    </div>
+    <div class="field">
+      <label for="imp-text">${esc(t.importPage.pasteLabel)}</label>
+      <textarea id="imp-text" name="text" rows="6" dir="auto"
+        placeholder="الاسم,رقم العمارة,رقم الشقة,رقم الموبايل"></textarea>
+      <p class="hint">${esc(t.importPage.pasteHint)}</p>
+    </div>
+    <button class="btn" type="submit">${esc(t.importPage.preview)}</button>
+  </form>
+</div>
+
+${d.outcome ? `
+<div class="card" style="border-inline-start:5px solid var(--ok)">
+  <h3 style="margin-block-start:0">✅ ${esc(t.importPage.done)}</h3>
+  <div class="tiles">
+    <div class="tile"><div class="lbl">${esc(t.importPage.created)}</div>
+      <div class="v">${num(d.outcome.created)}</div></div>
+    <div class="tile" style="--tc:var(--ink-muted);--tsoft:var(--surface-2)">
+      <div class="lbl">${esc(t.importPage.skipped)}</div>
+      <div class="v">${num(d.outcome.skipped)}</div></div>
+    <div class="tile" style="--tc:var(--ink-muted);--tsoft:var(--surface-2)">
+      <div class="lbl">${esc(t.importPage.newBuildings)}</div>
+      <div class="v">${num(d.outcome.buildings)}</div></div>
+    <div class="tile" style="--tc:var(--ink-muted);--tsoft:var(--surface-2)">
+      <div class="lbl">${esc(t.importPage.newUnits)}</div>
+      <div class="v">${num(d.outcome.units)}</div></div>
+  </div>
+  <p class="hint">${esc(t.importPage.nextStep)}</p>
+  <a class="btn btn-2" href="/admin/members">${esc(t.importPage.toMembers)}</a>
+</div>` : ''}
+
+${!d.batch ? `
+<div class="card">${empty('📄', t.importPage.empty, t.importPage.emptyHint)}</div>`
+: d.batch.rows.length === 0 ? `
+<div class="card">${empty('📄', t.importPage.noRows, t.importPage.emptyHint)}</div>` : `
+<div class="card">
+  <h3 style="margin-block-start:0">🔎 ${esc(t.importPage.previewTitle)}</h3>
+  <div class="banner info">${esc(t.importPage.previewHint)}</div>
+  <p class="muted">
+    <span class="chip ok">${esc(t.importPage.ok)} ${num(d.batch.okCount)}</span>
+    ${d.batch.problemCount > 0
+      ? `<span class="chip warn">${esc(t.importPage.problem)} ${num(d.batch.problemCount)}</span>` : ''}
+  </p>
+  ${d.batch.unmappedHeaders.length > 0
+    ? banner('warn', `${t.importPage.unmapped}: ${d.batch.unmappedHeaders.join('، ')}`) : ''}
+
+  ${ok.length > 0 ? `<div class="table-wrap" tabindex="0"><table>
+    <thead><tr>
+      <th>${esc(t.importPage.rowNo)}</th><th>${esc(t.importPage.name)}</th>
+      <th>${esc(t.importPage.building)}</th><th>${esc(t.importPage.unit)}</th>
+      <th>${esc(t.importPage.phone)}</th>
+    </tr></thead>
+    <tbody>${ok.map(r => `
+      <tr>
+        <td>${num(r.rowNo)}</td><td>${esc(r.fullName ?? '—')}</td>
+        <td>${num(r.buildingCode ?? '—')}</td><td>${num(r.unitNumber ?? '—')}</td>
+        <td>${num(r.phoneE164 ?? '—')}</td>
+      </tr>`).join('')}</tbody>
+  </table></div>` : ''}
+
+  ${d.outcome ? '' : `
+  <form method="post" action="/admin/import/${esc(d.batch.id)}/confirm">
+    <p class="hint">${esc(t.importPage.confirmHint)}</p>
+    <button class="btn" type="submit"${ok.length === 0 ? ' disabled' : ''}>${
+      esc(t.importPage.confirm)}</button>
+  </form>`}
+</div>
+
+${bad.length > 0 ? `
+<div class="card" style="border-inline-start:5px solid var(--warn)">
+  <h3 style="margin-block-start:0">⚠️ ${esc(t.importPage.problemsTitle)}</h3>
+  <p class="hint">${esc(t.importPage.problemsHint)}</p>
+  <div class="table-wrap" tabindex="0"><table>
+    <thead><tr>
+      <th>${esc(t.importPage.rowNo)}</th><th>${esc(t.importPage.name)}</th>
+      <th>${esc(t.importPage.state)}</th>
+    </tr></thead>
+    <tbody>${bad.map(r => `
+      <tr>
+        <td>${num(r.rowNo)}</td>
+        <td>${esc(r.fullName ?? '—')}</td>
+        <td>${esc(r.problemAr ?? r.status)}</td>
+      </tr>`).join('')}</tbody>
+  </table></div>
+</div>` : ''}`}`);
+}
+
+/* ===================================================================== */
+/* /admin/recoveries — الاستعادة والتفعيل                                  */
+/* ===================================================================== */
+
+/**
+ * Assisted recovery, with both signatures visible.
+ *
+ * The flow existed and had no door: `requestRecovery`, `approveRecovery` and
+ * `fulfilRecovery` were reachable only as JSON, which meant the one procedure
+ * for "my phone was stolen and my account holds a year of payments" could not
+ * be run by the board it was written for.
+ *
+ * The three steps stay three steps on the screen because they are three
+ * decisions by two different people, and the database enforces the difference
+ * (`CHECK (approved_by <> requested_by)`). The identity check is a required
+ * free-text field rather than a checkbox for the same reason: a checkbox
+ * records that somebody clicked, and what the record needs to hold is what
+ * they actually did to be sure.
+ *
+ * Fulfilment revokes every session and passkey the person has, and the button
+ * says so before it is pressed — that is the entire point of the procedure,
+ * not a side effect, and an admin who does not expect it will read the result
+ * as the portal breaking.
+ */
+export function recoveriesPage(d: {
+  open: Array<{
+    id: string; identity_check_ar: string; requested_at: string;
+    requested_by: string; approved_by: string | null;
+    target_name: string; target_unit: string | null;
+    requested_by_name: string | null; approved_by_name: string | null;
+  }>;
+  /** Candidates for a new request — the people who already hold a device. */
+  people: Array<{ id: string; full_name: string; unit_label: string | null }>;
+  meId: string;
+  flash?: string;
+  error?: string;
+}): string {
+  const card = (r: typeof d.open[number]) => {
+    const mine = r.requested_by === d.meId;
+    return `
+  <div class="card" style="border-inline-start:5px solid ${
+    r.approved_by ? 'var(--ok)' : 'var(--warn)'}">
+    <div class="row-head">
+      <h3 style="margin-block-start:0">${esc(r.target_name)}</h3>
+      <span class="chip ${r.approved_by ? 'ok' : 'warn'}">${
+        esc(r.approved_by ? t.recoveries.approvedBy : t.recoveries.waitingSecond)}</span>
+    </div>
+    <p class="muted">${esc(r.target_unit ?? '—')}</p>
+    <div class="row">
+      <span class="ico" aria-hidden="true">📝</span>
+      <span class="row-body"><b>${esc(t.recoveries.check)}</b>
+        <span class="muted">${esc(r.identity_check_ar)}</span></span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">✍️</span>
+      <span class="row-body"><b>${esc(t.recoveries.requestedBy)}</b>
+        <span class="muted">${esc(r.requested_by_name ?? '—')} · ${arDate(r.requested_at)}</span></span>
+    </div>
+    ${r.approved_by ? `
+    <div class="row">
+      <span class="ico" aria-hidden="true">✅</span>
+      <span class="row-body"><b>${esc(t.recoveries.approvedBy)}</b>
+        <span class="muted">${esc(r.approved_by_name ?? '—')}</span></span>
+    </div>
+    <form method="post" action="/admin/recoveries/${esc(r.id)}/fulfil">
+      <p class="hint">${esc(t.recoveries.fulfilHint)}</p>
+      <button class="btn btn-danger" type="submit">${esc(t.recoveries.fulfil)}</button>
+    </form>`
+    : mine
+      ? `<p class="hint">${esc(t.recoveries.approveHint)}</p>`
+      : `<form method="post" action="/admin/recoveries/${esc(r.id)}/approve">
+           <button class="btn" type="submit">${esc(t.recoveries.approve)}</button>
+         </form>`}
+  </div>`;
+  };
+
+  return page({ title: t.recoveries.title, active: 'home' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">🆘 ${esc(t.recoveries.title)}</h2>
+  <p class="muted">${esc(t.recoveries.subtitle)}</p>
+  ${d.error ? banner('warn', d.error) : ''}
+  ${d.flash ? banner('ok', d.flash) : ''}
+  <div class="banner info">${esc(t.recoveries.why)}</div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">➕ ${esc(t.recoveries.newTitle)}</h3>
+  ${d.people.length === 0
+    // An empty picker above a live submit button is a dead end that reads as a
+    // broken screen. On the first day of a village nobody has enrolled a device
+    // yet, so this is the NORMAL state here — and the right answer is the other
+    // door, named and linked.
+    ? `${empty('👤', t.recoveries.noCandidates, t.recoveries.noCandidatesHint)}
+       <a class="btn btn-2" href="/admin/members">${esc(t.importPage.toMembers)}</a>`
+    : `<form method="post" action="/admin/recoveries">
+    <div class="field">
+      <label for="rc-who">${esc(t.recoveries.who)}</label>
+      <select id="rc-who" name="target" required>
+        ${d.people.map(p => `<option value="${esc(p.id)}">${esc(p.full_name)}${
+          p.unit_label ? ` — ${esc(p.unit_label)}` : ''}</option>`).join('')}
+      </select>
+      <p class="hint">${esc(t.recoveries.whoHint)}</p>
+    </div>
+    <div class="field">
+      <label for="rc-check">${esc(t.recoveries.check)}</label>
+      <textarea id="rc-check" name="check" rows="3" minlength="10" required></textarea>
+      <p class="hint">${esc(t.recoveries.checkHint)}</p>
+    </div>
+    <button class="btn" type="submit">${esc(t.recoveries.open)}</button>
+  </form>`}
+</div>
+
+<h2>${esc(t.recoveries.openTitle)}</h2>
+${d.open.length === 0
+  ? `<div class="card">${empty('🆘', t.recoveries.empty, t.recoveries.emptyHint)}</div>`
+  : d.open.map(card).join('')}`);
 }

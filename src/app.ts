@@ -108,9 +108,29 @@ export function createApp(deps: AppDeps) {
     await next();
     const type = c.res.headers.get('content-type') ?? '';
     if (!type.includes('text/html')) return;
+
     const { theme, fs } = readPrefs(c.req.header('cookie') ?? '');
-    if (!theme && !fs && c.req.path === '/') return;
-    const body = await c.res.text();
+    const ctx = c.get('ctx');
+    let body = await c.res.text();
+
+    // The app bar and the drawer are filled in here, for the same reason the
+    // theme is: identity is request state and views may not read requests.
+    // Threading a `me` object through forty `page()` calls would mean the one
+    // screen that forgot it renders a header with nobody in it.
+    if (ctx && body.includes('<!--SHELL_DRAWER-->')) {
+      try {
+        body = _layout.applyShell(body, {
+          name: await data.getDisplayName(ctx, deps.db),
+          roleAr: ROLE_AR[ctx.role] ?? ctx.role,
+          unread: await data.unreadCount(ctx, deps.db),
+          menu: menuFor(ctx),
+        }, c.req.path);
+      } catch {
+        // A header that could not be personalised must not take the page down;
+        // the markers simply stay empty and the place name shows instead.
+      }
+    }
+
     c.res = new Response(
       _layout.applyPrefs(body, theme, fs, c.req.path),
       { status: c.res.status, headers: c.res.headers },
@@ -281,25 +301,98 @@ export function createApp(deps: AppDeps) {
    * sees content but never the receipt queue. The routes check again; this is
    * only what gets drawn.
    */
-  const boardLinks = (ctx: AuthContext) => {
-    const out: { href: string; icon: string; label: string }[] = [];
-    const add = (cap: Parameters<typeof can>[1], href: string, icon: string, label: string) => {
-      if (can(ctx.role, cap)) out.push({ href, icon, label });
+  const ROLE_AR: Record<string, string> = {
+    developer: _t.shell.roleDeveloper, admin: _t.shell.roleAdmin,
+    operator: _t.shell.roleOperator, finance_reviewer: _t.shell.roleFinanceReviewer,
+    resident: _t.shell.roleResident,
+  };
+
+  /**
+   * Every destination this caller may open, grouped for the drawer.
+   *
+   * Nineteen screens do not fit in five bottom-nav slots, and until now the
+   * board's half of the product was reachable only from a card on the home
+   * page. The drawer is a `<details>` element — no JavaScript, correct
+   * semantics, real keyboard support — and its contents are COMPUTED from
+   * `can()` rather than rendered and hidden, so a link that appears is a link
+   * that works. Each route re-checks the same capability regardless.
+   */
+  const menuFor = (ctx: AuthContext) => {
+    const groups: Array<{ group: string; items: Array<{ href: string; icon: string; label: string }> }> = [];
+    const push = (group: string, items: Array<[cap: Parameters<typeof can>[1] | null, href: string, icon: string, label: string]>) => {
+      const allowed = items
+        .filter(([cap]) => cap === null || can(ctx.role, cap))
+        .map(([, href, icon, label]) => ({ href, icon, label }));
+      if (allowed.length) groups.push({ group, items: allowed });
     };
-    add('user.create', '/admin/members', '👥', _t.members.title);
-    add('payment.review', '/admin/review', '🧾', _t.admin.queueTitle);
-    add('payment.read_any', '/admin/payments', '✅', _t.admin.approvedTitle);
-    add('expense.record', '/admin/expenses', '💸', _t.expenses.title);
-    add('fee.manage', '/admin/fees', '📅', _t.fees.title);
-    add('payment.read_any', '/admin/settlements', '🏦', _t.settle.title);
-    add('post.publish', '/admin/content', '✍️', _t.content.manage);
-    add('category.manage', '/admin/categories', '🏷️', _t.categories.title);
-    add('user.assign_role', '/admin/users', '🛡️', _t.users.title);
-    add('staff.read_names', '/admin/staff', '👷', _t.staffAdmin.title);
-    add('audit.read', '/admin/audit', '📜', _t.auditView.title);
-    add('settings.edit', '/admin/map', '🗺️', _t.map.adminTitle);
-    add('settings.edit', '/admin/settings', '⚙️', _t.settings.title);
-    add('system.read_quota', '/admin/health', '📊', _t.health.title);
+
+    push(_t.shell.groupMe, [
+      [null, '/', '🏠', _t.nav.home],
+      [null, '/me', '👤', _t.me.title],
+      [null, '/pay', '💳', _t.home.payNow],
+      [null, '/payments', '🧾', _t.nav.myPayments],
+      [null, '/notifications', '🔔', _t.nav.inbox],
+    ]);
+    push(_t.shell.groupVillage, [
+      [null, '/finance', '💰', _t.nav.finance],
+      [null, '/finance/units', '🏢', _t.finance.unitsTitle],
+      [null, '/map', '🗺️', _t.map.title],
+      [null, '/news', '📣', _t.content.title],
+      [null, '/albums', '📸', _t.albums.title],
+      [null, '/maintenance', '🛠️', _t.maintenance.title],
+      [null, '/search', '🔎', _t.search.title],
+    ]);
+    push(_t.shell.groupBoard, [
+      ['payment.review', '/admin/review', '✅', _t.admin.queueTitle],
+      ['payment.read_any', '/admin/payments', '🧾', _t.admin.approvedTitle],
+      ['expense.record', '/admin/expenses', '💸', _t.expenses.title],
+      ['fee.manage', '/admin/fees', '📅', _t.fees.title],
+      ['payment.read_any', '/admin/settlements', '🏦', _t.settle.title],
+      ['user.create', '/admin/members', '👥', _t.members.title],
+      ['user.import', '/admin/import', '📥', _t.importPage.title],
+      ['phone.change', '/admin/recoveries', '🆘', _t.recoveries.title],
+      ['post.publish', '/admin/content', '✍️', _t.content.manage],
+    ]);
+    push(_t.shell.groupOversight, [
+      ['audit.read', '/admin/ledger', '📚', _t.ledger.title],
+      ['audit.read', '/admin/audit', '📜', _t.auditView.title],
+      ['category.manage', '/admin/categories', '🏷️', _t.categories.title],
+      ['user.assign_role', '/admin/users', '🛡️', _t.users.title],
+      ['staff.read_names', '/admin/staff', '👷', _t.staffAdmin.title],
+      ['settings.edit', '/admin/map', '🗺️', _t.map.adminTitle],
+      ['settings.edit', '/admin/settings', '⚙️', _t.settings.title],
+      ['system.read_quota', '/admin/health', '📊', _t.health.title],
+    ]);
+    return groups;
+  };
+
+  /** The identity the app bar shows, and the drawer it opens. */
+  const shellFor = async (ctx: AuthContext) => ({
+    name: await data.getDisplayName(ctx, deps.db),
+    roleAr: ROLE_AR[ctx.role] ?? ctx.role,
+    menu: menuFor(ctx),
+  });
+
+  /**
+   * The queues the caller may actually act on.
+   *
+   * Gated per item rather than per screen: a finance_reviewer sees the receipt
+   * queue because they audit it, and never sees the members queue because
+   * issuing activation links is not theirs. Zero-count queues are dropped by
+   * the view — a counter that is always visible stops being a signal.
+   */
+  const queuesFor = async (ctx: AuthContext) => {
+    const q = await adm.pendingQueues(ctx, deps.db);
+    const out: { icon: string; label: string; count: number; href: string; cta: string }[] = [];
+    const add = (cap: Parameters<typeof can>[1], icon: string, label: string,
+                 count: number, href: string, cta: string) => {
+      if (can(ctx.role, cap)) out.push({ icon, label, count, href, cta });
+    };
+    add('payment.review', '🧾', _t.dash.queueReceipts, q.receipts, '/admin/review', _t.dash.queueReceiptsGo);
+    add('expense.countersign', '💸', _t.dash.queueExpenses, q.expenses, '/admin/expenses', _t.dash.queueExpensesGo);
+    add('payment.read_any', '🏦', _t.dash.queueSettlements, q.settlements, '/admin/settlements', _t.dash.queueSettlementsGo);
+    add('user.create', '👥', _t.dash.queueMembers, q.membersWaiting, '/admin/members', _t.dash.queueMembersGo);
+    add('post.publish', '🛠️', _t.dash.queueTickets, q.tickets, '/maintenance', _t.dash.queueTicketsGo);
     return out;
   };
 
@@ -420,8 +513,8 @@ export function createApp(deps: AppDeps) {
 
     return html(v.homePage({
       name: c.req.query('name') ?? (await data.getDisplayName(ctx, deps.db)),
-      building: String(stmt?.['building_code'] ?? '—'),
-      unit: String(stmt?.['unit_number'] ?? '—'),
+      building: stmt?.['building_code'] != null ? String(stmt['building_code']) : null,
+      unit: stmt?.['unit_number'] != null ? String(stmt['unit_number']) : null,
       duePiastres: Number(stmt?.['due_piastres'] ?? 0),
       paidPiastres: Number(stmt?.['paid_piastres'] ?? 0),
       outstandingPiastres: Number(stmt?.['outstanding_piastres'] ?? 0),
@@ -432,7 +525,20 @@ export function createApp(deps: AppDeps) {
       pinned: pinned ? { title: pinned.title_ar, body: pinned.body_ar } : null,
       unread: await data.unreadCount(ctx, deps.db),
       demo: deps.demo,
-      adminLinks: boardLinks(ctx),
+      incomePiastres: Number(totals?.['total_income_piastres'] ?? 0),
+      expensePiastres: Number(totals?.['total_expense_piastres'] ?? 0),
+      queues: await queuesFor(ctx),
+      news: (await content.listPosts(ctx, deps.db, { limit: 3 }))
+        .map(p => ({ slug: p.slug, title: p.title_ar, published: p.published_at ?? '' })),
+      // The audit feed is oversight, so it is drawn only for the people who
+      // hold `audit.read` — a resident's home screen is about their own money.
+      activity: can(ctx.role, 'audit.read')
+        ? (await adm.auditFeed(ctx, deps.db, 6)).map(a => ({
+            who: a.actor_name ?? '—',
+            what: av.auditActionAr(a.action),
+            when: a.created_at,
+          }))
+        : undefined,
     }));
   });
 
@@ -1273,6 +1379,147 @@ export function createApp(deps: AppDeps) {
   app.get('/api/admin/import/:batchId', async c =>
     c.json(await onboard.getImportPreview(need(c), deps.db, c.req.param('batchId') as never)));
 
+  /**
+   * …and the same three calls as a screen.
+   *
+   * The importer, the recovery flow and everything under them existed as JSON
+   * only, which meant the board could not put 204 owners into the portal or
+   * recover a stolen phone without a developer at a terminal. Those are the two
+   * procedures a village needs on its FIRST day and its worst day.
+   *
+   * Both screens post ordinary forms and ship no JavaScript, like the rest of
+   * the product. The import posts `multipart/form-data` because the register
+   * arrives as a file; `parseBody` hands back a `File`, and a pasted table is
+   * accepted on the same route for the board member who cannot find «حفظ باسم
+   * CSV».
+   */
+  app.get('/admin/import', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.import')) throw new Forbidden('user.import');
+    return html(av.importPage({}));
+  });
+
+  app.post('/admin/import', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.import')) throw new Forbidden('user.import');
+    const f = await c.req.parseBody();
+    const upload = f['file'];
+    // The file wins when both are filled in — it is the one the admin chose
+    // deliberately, and a stale paste box silently overriding it would import
+    // the wrong register.
+    const text = upload instanceof File && upload.size > 0
+      ? await upload.text()
+      : String(f['text'] ?? '');
+    const filename = upload instanceof File && upload.size > 0 ? upload.name : null;
+    if (!text.trim()) {
+      return html(av.importPage({ error: _t.importPage.noRows }), 400);
+    }
+    const parsed = parseOwners(text);
+    const batchId = await onboard.stageImport(ctx, deps.db, filename, parsed);
+    return html(av.importPage({
+      batch: {
+        id: batchId, okCount: parsed.okCount, problemCount: parsed.problemCount,
+        unmappedHeaders: parsed.unmappedHeaders, rows: parsed.rows,
+      },
+    }));
+  });
+
+  app.post('/admin/import/:batchId/confirm', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.import')) throw new Forbidden('user.import');
+    const batchId = c.req.param('batchId') as never;
+    const preview = await onboard.getImportPreview(ctx, deps.db, batchId);
+    const rows = preview.rows as Array<{
+      rowNo: number; fullName: string | null; buildingCode: string | null;
+      unitNumber: string | null; phoneE164: string | null;
+      status: string; problemAr: string | null;
+    }>;
+    const batch = {
+      id: preview.id, okCount: preview.ok_count, problemCount: preview.problem_count,
+      unmappedHeaders: [], rows,
+    };
+    try {
+      const outcome = await onboard.commitImport(ctx, deps.db, batchId, deps.now);
+      return html(av.importPage({ batch, outcome }));
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(av.importPage({ batch, error: e.reasonAr }), 409);
+      throw e;
+    }
+  });
+
+  /* ---- الاستعادة والتفعيل (R-023) --------------------------------------- */
+
+  const recoveriesScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
+    av.recoveriesPage({
+      open: await onboard.listOpenRecoveries(ctx, deps.db),
+      people: await onboard.recoveryCandidates(ctx, deps.db),
+      meId: String(ctx.personId),
+      flash, error,
+    });
+
+  const recoveryAction = async (
+    c: { get(k: 'ctx'): AuthContext | null }, run: (ctx: AuthContext) => Promise<string>,
+  ) => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'phone.change')) throw new Forbidden('phone.change');
+    let flash: string;
+    try {
+      flash = await run(ctx);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await recoveriesScreen(ctx, undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await recoveriesScreen(ctx, undefined, e.reasonAr), 403);
+      throw e;
+    }
+    return html(await recoveriesScreen(ctx, flash));
+  };
+
+  app.get('/admin/recoveries', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'phone.change')) throw new Forbidden('phone.change');
+    return html(await recoveriesScreen(ctx));
+  });
+
+  app.post('/admin/recoveries', async c => {
+    const f = await c.req.parseBody();
+    return recoveryAction(c, async ctx => {
+      await onboard.requestRecovery(ctx, deps.db, String(f['target'] ?? '') as never,
+        String(f['check'] ?? ''));
+      return _t.recoveries.opened;
+    });
+  });
+
+  app.post('/admin/recoveries/:id/approve', async c =>
+    recoveryAction(c, async ctx => {
+      await onboard.approveRecovery(ctx, deps.db, c.req.param('id') as never, deps.now);
+      return _t.recoveries.approved;
+    }));
+
+  /**
+   * Fulfilment ends the old phone's access and then hands the board a fresh
+   * activation link in one response. Splitting them would leave a resident
+   * locked out between two screens, holding a phone that stopped working and
+   * no link yet — which is the moment they call somebody and are told to wait.
+   */
+  app.post('/admin/recoveries/:id/fulfil', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'phone.change')) throw new Forbidden('phone.change');
+    try {
+      const { targetProfileId, fullName } = await onboard.fulfilRecovery(
+        ctx, deps.db, c.req.param('id') as never, deps.now);
+      const { token, expiresAt } = await onboard.issueRecoveryActivation(
+        ctx, deps.db, targetProfileId as never, passkey.sha256, passkey.randomToken, deps.now);
+      return html(cv.membersPage({
+        members: await onboard.listMembers(ctx, deps.db, fullName),
+        q: fullName,
+        issued: { name: fullName, url: `${deps.rp.origin}/login/activate?t=${token}`, expiresAt },
+      }));
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await recoveriesScreen(ctx, undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await recoveriesScreen(ctx, undefined, e.reasonAr), 403);
+      throw e;
+    }
+  });
+
   /* ===================================================================== */
   /* CP-6 — content & memory                                               */
   /*                                                                        */
@@ -1802,6 +2049,80 @@ export function createApp(deps: AppDeps) {
     const ctx = need(c);
     if (!can(ctx.role, 'audit.read')) throw new Forbidden('audit.read');
     return html(av.auditPage({ rows: await adm.auditFeed(ctx, deps.db) }));
+  });
+
+  /* ---- دفتر القيود ------------------------------------------------------- */
+
+  /**
+   * The journal itself. `/finance` answers "how much"; this answers "on what
+   * basis" — and until now the only way to read it was `sqlite3` against a
+   * production database, which is not a thing a treasurer defending a figure
+   * in front of the board can do.
+   *
+   * Lines are loaded for the page of entries being shown, not per entry on
+   * demand, because there is no JavaScript here: a `<details>` that had to
+   * fetch would just be a link to a second screen, and the question is almost
+   * always "what were the two sides of THIS one".
+   */
+  app.get('/admin/ledger', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'audit.read')) throw new Forbidden('audit.read');
+    const LIMIT = 25;
+    const offset = Math.max(0, Number(c.req.query('offset') ?? 0) || 0);
+    const entries = await adm.journal(ctx, deps.db, LIMIT, offset);
+    const lines: Record<string, adm.JournalLineRow[]> = {};
+    for (const e of entries) lines[e.id] = await adm.journalLines(ctx, deps.db, e.id as never);
+    return html(av.ledgerPage({
+      entries, lines, offset, limit: LIMIT,
+      total: await adm.journalCount(ctx, deps.db),
+    }));
+  });
+
+  /* ---- حسابي ------------------------------------------------------------- */
+
+  /**
+   * A person's own account: which devices can open it, and how to close one.
+   *
+   * Passkeys are the entire authentication story here, so an enrolled device
+   * the owner does not recognise is the only visible symptom of a compromised
+   * account — and there was nowhere to look. Everything on this page is about
+   * the caller's own identity, so it needs no capability beyond being logged
+   * in; `myAccount` still takes `ctx` and scopes every query to `personId`.
+   */
+  const meScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
+    av.mePage({
+      me: await adm.myAccount(ctx, deps.db),
+      roleAr: ROLE_AR[ctx.role] ?? ctx.role,
+      flash, error,
+    });
+
+  app.get('/me', async c => html(await meScreen(need(c))));
+
+  /**
+   * Revoking the LAST device is allowed, and the page says what it costs. The
+   * alternative — silently refusing — leaves somebody who believes their
+   * account is compromised with no way to close it, which is the worse
+   * failure. `revokeCredential` is scoped to `profile_id = ctx.personId`, so
+   * this cannot reach another person's device even with a guessed id.
+   */
+  app.post('/me/devices/:id/revoke', async c => {
+    const ctx = need(c);
+    try {
+      await adb.revokeCredential(ctx, deps.db, c.req.param('id'), deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await meScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return html(await meScreen(ctx, _t.me.revoked));
+  });
+
+  /** "اقفل كل الجلسات" — including this one, so the response is a redirect to
+   *  login rather than a page rendered with a session that no longer exists. */
+  app.post('/me/sessions/revoke', async c => {
+    const ctx = need(c);
+    await mutations.revokeAllSessions(ctx, deps.db, ctx.personId as never, deps.now);
+    c.header('set-cookie', 'qa_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
+    return c.redirect('/login', 303);
   });
 
   /* ---- خريطة القرية (C13 / 07_VILLAGE_MAP_SPEC) -------------------------- */
