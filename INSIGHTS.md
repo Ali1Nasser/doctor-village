@@ -1273,3 +1273,11 @@ screenshot was from before the deploy. Their next screenshot had the new card in
 error, which falsified that in one image. The cost was a round trip; the lesson is to check a claim
 about WHICH VERSION produced a screenshot against something version-specific in the screenshot
 itself, which was available both times.
+
+**[2026-08-08] [ops] ⭐ `new Response(body, { headers })` keeps ONE value per field — including
+`set-cookie`.** The probe cookie passed its test in Node (undici's `Headers` preserves duplicates)
+and silently vanished in the Workers runtime, where the preferences middleware rebuilds every HTML
+response. One cookie arrived; the other did not; nothing errored. Found only by dumping the live
+response headers after deploying. Carrying them across needs `getSetCookie()` and `append()`
+explicitly. **Two runtimes, two behaviours, one passing test — a header-level assertion belongs
+against the real deployment, not only the test harness.**

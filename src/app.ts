@@ -131,9 +131,22 @@ export function createApp(deps: AppDeps) {
       }
     }
 
+    // Rebuilding the response has to carry `set-cookie` across BY HAND.
+    //
+    // `new Response(body, { headers })` keeps one value per field name, so a
+    // response setting two cookies arrives at the browser with one. It passed
+    // in Node (undici preserves them) and lost the probe cookie in the Workers
+    // runtime — visible only by dumping the live response headers, which is why
+    // this is asserted against a real deployment and not only in a test.
+    const setCookies = c.res.headers.getSetCookie?.() ?? [];
+    const headers = new Headers(c.res.headers);
+    if (setCookies.length > 1) {
+      headers.delete('set-cookie');
+      for (const one of setCookies) headers.append('set-cookie', one);
+    }
     c.res = new Response(
       _layout.applyPrefs(body, theme, fs, c.req.path),
-      { status: c.res.status, headers: c.res.headers },
+      { status: c.res.status, headers },
     );
   });
 
