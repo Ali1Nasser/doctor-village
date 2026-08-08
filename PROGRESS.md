@@ -10,10 +10,41 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~670 checks green** (107 unit · 418 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ⚠️ **The DEPLOYED Worker is several sessions behind this branch** (R-098) — judge the product from `preview/demo.html` or `npm run dev`, not from the live URL, until it is redeployed. |
+| **Status** | 🟢 **~690 checks green** (107 unit · 437 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ⚠️ **The DEPLOYED Worker is several sessions behind this branch** (R-098) — judge the product from `preview/demo.html` or `npm run dev`, not from the live URL, until it is redeployed. |
 | **Last updated** | 2026-08-08 (session 29) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 30 — accounts, and the wall down the middle of them
+
+The board asked for one rule: **the developer and the board create and edit accounts, and every
+account holder edits some of their own details — but not the ones the account was created from.**
+
+The split is the design, so both halves are named explicitly in `migrations/0025`:
+
+| Created from — board only | Editable by the owner |
+|---|---|
+| the register name · the LOGIN number · the role · the flat · active/stopped | a second contact number · preferred channel · one note to the board |
+
+Each field on the left already had its own audited mutation; what was missing was the ability to
+**create** an account at all (only the bulk importer existed) and to **correct** a name or move a
+flat. Those are now `createProfile`, `renameProfile` and `setUnitOwner` on `/admin/users` —
+`setUnitOwner` closes the previous ownership row with today's date rather than overwriting it,
+because January's receipt still has to name whoever owned the flat in January.
+
+**The right-hand column's security property is in the signature.** `updateOwnProfile` takes **no
+target id**, so it cannot name another person — not "checks that the target is you", takes none —
+and its SQL names three columns, so a resident promoting themselves is not a case it defends against
+but one it cannot express. `tests/access/accounts.test.ts` posts `role=admin`, `full_name`,
+`is_active=0`, a unit, a phone and two foreign profile ids into `/me` in one request and then asserts
+every one of them was ignored while the contact number went through.
+
+Two defects of my own, both found by looking rather than by a test: the per-row flat picker rendered
+204 `<option>` elements into each of 205 rows — **42,842 elements, 3.3 MB** — and is now two numeric
+boxes resolved server-side (123 KB); and `verify_ledger.py` broke in three places on
+`INSERT INTO profiles VALUES (?,?,?,?,?,?,?,?,?)` with the count typed by hand.
+
+---
 
 ### What changed in session 29c — the layout nobody had opened
 

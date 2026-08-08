@@ -122,6 +122,15 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
       admin cannot finish alone and that the lost phone's session dies.
 - [x] **Owner-register import from a screen** — `/admin/import` (2026-08-08). Upload or paste,
       preview that creates nothing, then a separate confirm. Same tests, same file.
+- [x] **Accounts created and edited from the product** (2026-08-08). `/admin/users` creates one
+      account (name, login number, role, optional flat), corrects a name, and moves a flat —
+      closing the previous ownership row rather than overwriting it. Creating an account mints no
+      credential; activation stays a separate audited act.
+- [x] **Self-service profile** — `/me` lets the account holder change a second contact number,
+      their preferred channel and one note, and states plainly which fields only the board can
+      change and why. `updateOwnProfile` takes no target id and its SQL names three columns, so
+      the wall is structural rather than checked; `tests/access/accounts.test.ts` attacks it
+      through the form.
 - [x] Login UI per `04_UX_SPEC.md` §3 — "الدخول ببصمة أو قفل الموبايل" (screen renders; the
       WebAuthn call behind the button is still to come)
 - [x] Session middleware, route guards, `lib/rbac.ts` as the single source of permission truth

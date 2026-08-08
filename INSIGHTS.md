@@ -1204,3 +1204,25 @@ Three defects only appeared against the live database: the untranslated audit ac
 the seed, and `npm run deploy` being documented in `AGENTS.md` and absent from `package.json` — so
 the documented command had never once been run. A demo database that only ever holds seeded rows
 cannot show you what production data does to a screen.
+
+**[2026-08-08] [design] Put a security boundary in a function's SIGNATURE where you can.**
+`updateOwnProfile` takes no target id. Not "checks that the target is you" — takes none, so
+`ctx.personId` is the only identity it can reach and no route bug, crafted form field or future
+refactor can point it at somebody else. Its SQL then names three columns, so "a resident promotes
+themselves to admin" is not a case it defends against, it is a case it *cannot express*. Compare
+`renameProfile` a few lines up, which does take a target and therefore needs `user.create` guarding
+it, plus a test. **A property the type system or the SQL shape enforces needs no vigilance; a
+property enforced by an `if` needs it forever.**
+
+**[2026-08-08] [perf] A `<select>` inside a repeated row multiplies.** The per-person unit picker
+looked obviously right — 204 flats, choose one — until it was rendered once per person: 205 rows ×
+204 `<option>` = **42,842 elements and a 3.3 MB page**, on a screen whose stated design target is a
+five-year-old Android. Two `inputmode="numeric"` boxes for building and flat are 0 options, resolve
+unambiguously server-side, and match how the board says it out loud («عمارة 22 شقة 4»). 3.3 MB →
+123 KB. **Before putting a control in a row, multiply its DOM cost by the row count.**
+
+**[2026-08-08] [agent] `SELECT *` into a positional INSERT is a fixture that breaks on any migration.**
+Adding two columns to `profiles` broke `verify_ledger.py` in three places, each an
+`INSERT INTO profiles VALUES (?,?,?,?,?,?,?,?,?)` with the count typed by hand. None of them had
+anything to do with what the file tests, and a fixture that fails for an unrelated reason is one
+people learn to edit past rather than read. Count the placeholders from the row.

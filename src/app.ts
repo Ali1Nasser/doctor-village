@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 import type { Db } from '../lib/db/driver.js';
 import { LedgerRefused } from '../lib/db/driver.js';
 import { Forbidden, can } from '../lib/rbac.js';
-import { normalize } from '../lib/phone.js';
+import { normalize, PHONE_MESSAGES_AR } from '../lib/phone.js';
 import { parse as parseMoneyRaw, PARSE_MESSAGES_AR } from '../lib/money.js';
 import * as data from '../lib/db/index.js';
 import { NotFound } from '../lib/db/index.js';
@@ -1912,18 +1912,104 @@ export function createApp(deps: AppDeps) {
 
   /* ---- roles ------------------------------------------------------------- */
 
-  const usersScreen = async (ctx: AuthContext, q: string, flash?: string, error?: string) =>
+  /** 25, because each row carries three forms and the village is 205 people.
+   *  The search box above the list is the fast path; this is the browse one. */
+  const USERS_PAGE = 25;
+
+  const usersScreen = async (
+    ctx: AuthContext, q: string, flash?: string, error?: string, offset = 0,
+  ) =>
     av.usersPage({
-      people: await adm.listPeople(ctx, deps.db, q),
+      people: await adm.listPeople(ctx, deps.db, q, USERS_PAGE, offset),
+      total: await adm.countPeople(ctx, deps.db, q),
+      offset, limit: USERS_PAGE,
       me: ctx.personId,
       canAssignAdmin: can(ctx.role, 'user.assign_admin_role'),
+      // The flat list needs `user.create`, which a finance_reviewer reaching
+      // this screen for the role list does not hold. An empty list hides the
+      // create form's picker rather than 403-ing the whole page.
+      units: can(ctx.role, 'user.create') ? await adm.unitChoices(ctx, deps.db) : [],
       q, flash, error,
     });
+
+  /**
+   * Create one account.
+   *
+   * The importer handles a spreadsheet; this handles the case that actually
+   * recurs — a flat changed hands, a board member was elected, somebody was
+   * missed. Both end in the same place: an account that exists and cannot yet
+   * be logged into, because minting the credential is a separate, audited act
+   * on `/admin/members`.
+   */
+  app.post('/admin/users', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
+    const f = await c.req.parseBody();
+    const phone = normalize(String(f['phone'] ?? ''));
+    if (!phone.ok) {
+      return html(await usersScreen(ctx, '', undefined, PHONE_MESSAGES_AR[phone.error]), 400);
+    }
+    try {
+      await mutations.createProfile(ctx, deps.db, {
+        fullNameAr: String(f['name'] ?? ''),
+        phoneE164: phone.value,
+        role: String(f['role'] ?? 'resident') as never,
+        unitId: (String(f['unit'] ?? '') || null) as never,
+      }, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 403);
+      throw e;
+    }
+    return html(await usersScreen(ctx, '', _t.users.created));
+  });
+
+  app.post('/admin/users/:id/rename', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
+    const f = await c.req.parseBody();
+    try {
+      await mutations.renameProfile(ctx, deps.db, c.req.param('id') as never,
+        String(f['name'] ?? ''));
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 403);
+      throw e;
+    }
+    return html(await usersScreen(ctx, '', _t.users.renameDone));
+  });
+
+  app.post('/admin/users/:id/unit', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
+    const f = await c.req.parseBody();
+    const building = String(f['building'] ?? '').trim();
+    const flat = String(f['flat'] ?? '').trim();
+
+    // Both boxes empty is the DETACH button, which posts nothing. A half-filled
+    // pair is a typo, and saying so beats silently detaching them from a flat.
+    let unitId: string | null = null;
+    if (building || flat) {
+      const unit = await adm.resolveUnit(ctx, deps.db, building, flat);
+      if (!unit) return html(await usersScreen(ctx, '', undefined, _t.users.unitUnknown), 404);
+      unitId = unit.id;
+    }
+    try {
+      await mutations.setUnitOwner(ctx, deps.db, c.req.param('id') as never,
+        unitId as never, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await usersScreen(ctx, '', undefined, e.reasonAr), 403);
+      throw e;
+    }
+    return html(await usersScreen(ctx, '', _t.users.unitDone));
+  });
 
   app.get('/admin/users', async c => {
     const ctx = need(c);
     if (!can(ctx.role, 'user.assign_role')) throw new Forbidden('user.assign_role');
-    return html(await usersScreen(ctx, c.req.query('q') ?? ''));
+    return html(await usersScreen(ctx, c.req.query('q') ?? '', undefined, undefined,
+      Math.max(0, Number(c.req.query('offset') ?? 0) || 0)));
   });
 
   app.post('/admin/users/:id/role', async c => {
@@ -2098,6 +2184,43 @@ export function createApp(deps: AppDeps) {
     });
 
   app.get('/me', async c => html(await meScreen(need(c))));
+
+  /**
+   * The owner edits their own contact details.
+   *
+   * `updateOwnProfile` takes no target id, so this route cannot be pointed at
+   * anyone else however it is called — the identity comes from the session and
+   * from nowhere in the form. That is why there is no ownership check here:
+   * there is no id to check.
+   *
+   * An empty contact number CLEARS it rather than failing validation. "I put my
+   * old number in and want it gone" is a thing people do, and a form that
+   * refuses to accept blank leaves them with no way to undo.
+   */
+  app.post('/me', async c => {
+    const ctx = need(c);
+    const f = await c.req.parseBody();
+    const raw = String(f['contact_phone'] ?? '').trim();
+    let contact: string | null = null;
+    if (raw) {
+      const phone = normalize(raw);
+      if (!phone.ok) {
+        return html(await meScreen(ctx, undefined, PHONE_MESSAGES_AR[phone.error]), 400);
+      }
+      contact = phone.value;
+    }
+    try {
+      await mutations.updateOwnProfile(ctx, deps.db, {
+        contactPhoneE164: contact,
+        preferredChannel: String(f['channel'] ?? 'whatsapp') as never,
+        contactNoteAr: String(f['note'] ?? ''),
+      });
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await meScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return html(await meScreen(ctx, _t.me.saved));
+  });
 
   /**
    * Revoking the LAST device is allowed, and the page says what it costs. The

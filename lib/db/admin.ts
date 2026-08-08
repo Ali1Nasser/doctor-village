@@ -146,8 +146,18 @@ export interface PersonRow {
  * three of two hundred residents. Phone numbers are absent — `phone.read_any`
  * is a separate capability and a role list has no business carrying them.
  */
+export async function countPeople(ctx: AuthContext, db: Db, query?: string): Promise<number> {
+  require_(ctx.role, 'user.assign_role');
+  const q = (query ?? '').trim();
+  const like = q ? `%${q.replace(/[%_\\]/g, m => '\\' + m)}%` : null;
+  const r = await db.prepare(
+    `SELECT COUNT(*) AS n FROM profiles WHERE (? IS NULL OR full_name LIKE ? ESCAPE '\\')`
+  ).bind(like, like).first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
 export async function listPeople(
-  ctx: AuthContext, db: Db, query?: string,
+  ctx: AuthContext, db: Db, query?: string, limit = 400, offset = 0,
 ): Promise<PersonRow[]> {
   require_(ctx.role, 'user.assign_role');
   const q = (query ?? '').trim();
@@ -168,8 +178,50 @@ export async function listPeople(
                            WHEN 'finance_reviewer' THEN 2 WHEN 'operator' THEN 3
                            ELSE 4 END,
                p.is_active DESC, p.full_name
-      LIMIT 400`
-  ).bind(like, like).all<PersonRow>();
+      LIMIT ? OFFSET ?`
+  ).bind(like, like, Math.min(limit, 400), Math.max(offset, 0)).all<PersonRow>();
+  return r.results ?? [];
+}
+
+/**
+ * Resolve «عمارة 22 شقة 4» to a flat.
+ *
+ * The row-level unit editor used to be a `<select>` of every flat. With 204
+ * flats and 205 people that rendered 42,842 `<option>` elements into a 3.3 MB
+ * page — on a screen whose design target is a five-year-old Android. Two small
+ * number boxes are 0 options, unambiguous, and they match how the board
+ * actually says it out loud.
+ */
+export async function resolveUnit(
+  ctx: AuthContext, db: Db, buildingCode: string, unitNumber: string,
+): Promise<{ id: string; label: string } | null> {
+  require_(ctx.role, 'user.create');
+  const r = await db.prepare(
+    `SELECT u.id, b.name_ar || ' — ' || u.unit_number AS label
+       FROM units u JOIN buildings b ON b.id = u.building_id
+      WHERE b.code = ? AND u.unit_number = ? AND u.is_active = 1`
+  ).bind(buildingCode.trim(), unitNumber.trim()).first<{ id: string; label: string }>();
+  return r ?? null;
+}
+
+/**
+ * The flats an account can be attached to, as one labelled list.
+ *
+ * Deliberately every flat and not only the unowned ones: a flat changing hands
+ * is the commonest reason to touch this, and hiding the occupied ones would
+ * hide exactly the case the screen exists for. `setUnitOwner` closes the
+ * previous ownership row rather than deleting it, so history survives the move.
+ */
+export async function unitChoices(
+  ctx: AuthContext, db: Db,
+): Promise<Array<{ id: string; label: string }>> {
+  require_(ctx.role, 'user.create');
+  const r = await db.prepare(
+    `SELECT u.id, b.name_ar || ' — ' || u.unit_number AS label
+       FROM units u JOIN buildings b ON b.id = u.building_id
+      WHERE u.is_active = 1
+      ORDER BY b.sort_order, CAST(u.unit_number AS INTEGER), u.unit_number`
+  ).all<{ id: string; label: string }>();
   return r.results ?? [];
 }
 
@@ -305,6 +357,12 @@ export interface MyAccount {
   /** Masked. The full number is `phone.read_any`, which nobody holds over
    *  themselves — and a screen that prints it is a screen somebody photographs. */
   phone_masked: string | null;
+  /* The three fields the owner may edit (migration 0025). Shown in full,
+   * unlike the login number above: they typed these in themselves and there is
+   * nothing to protect them from. */
+  contact_phone_e164: string | null;
+  preferred_channel: string;
+  contact_note_ar: string | null;
   devices: Array<{
     id: string; device_label_ar: string; created_at: string; last_used_at: string | null;
   }>;
@@ -328,6 +386,7 @@ export async function myAccount(ctx: AuthContext, db: Db): Promise<MyAccount> {
   require_(ctx.role, 'profile.edit_own');
   const p = await db.prepare(
     `SELECT p.full_name, p.role,
+            p.contact_phone_e164, p.preferred_channel, p.contact_note_ar,
             (SELECT b.name_ar || ' — ' || u.unit_number
                FROM unit_owners uo
                JOIN units u ON u.id = uo.unit_id

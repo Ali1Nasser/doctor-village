@@ -22,7 +22,7 @@
 import type { AuthContext, Id, Role } from '../../types/domain.js';
 import { require_, Forbidden, assertMakerChecker } from '../rbac.js';
 import type { Db, PreparedStatement } from './driver.js';
-import { LedgerRefused } from './driver.js';
+import { LedgerRefused, asRefusal } from './driver.js';
 import { newId, NotFound, mutate, type Clock } from './index.js';
 
 /* ===================================================================== */
@@ -553,4 +553,232 @@ export const MUTATING_FUNCTIONS = [
   'renameCategory', 'grantDelegate', 'revokeDelegate', 'assignRole',
   'revokeAllSessions', 'updateSettings',
   'createCategory', 'activateCategory', 'setPersonActive', 'addStaff', 'endStaff',
+  'createProfile', 'renameProfile', 'setUnitOwner', 'updateOwnProfile',
 ] as const;
+
+/* ===================================================================== */
+/* Accounts — created and edited by the board, with one field the owner   */
+/* may touch                                                             */
+/* ===================================================================== */
+
+export interface NewProfile {
+  fullNameAr: string;
+  /** The LOGIN identifier. Already normalized to E.164 by the route. */
+  phoneE164: string;
+  role: Role;
+  /** Optional at creation: a board member has no flat, and a flat may arrive
+   *  later when the register is reconciled. */
+  unitId?: Id | null;
+}
+
+/**
+ * Create one account.
+ *
+ * The bulk importer has existed since CP-2 and is the right tool for 204 rows
+ * from a spreadsheet. It is the wrong tool for the case that actually recurs:
+ * a flat changes hands, a new board member is elected, somebody was missed.
+ * Until now that meant editing a CSV of one row and running an import batch.
+ *
+ * Everything here is a creation FACT — the name that must match the register,
+ * the number that will be the credential, the role, the flat. Each is also
+ * separately editable afterwards by the board and by nobody else; that is the
+ * wall migration 0025 documents.
+ *
+ * No credential is minted. The account exists and cannot be logged into until
+ * somebody issues an activation link from `/admin/members`, which is a second
+ * deliberate act with its own audit row.
+ */
+export async function createProfile(
+  ctx: AuthContext, db: Db, p: NewProfile, now: Clock,
+): Promise<Id> {
+  require_(ctx.role, 'user.create');
+  // Granting admin at creation is the same power as granting it afterwards, and
+  // must cost the same capability — otherwise "create an admin" is the way
+  // around `assignRole`'s check.
+  if (p.role === 'admin') require_(ctx.role, 'user.assign_admin_role');
+  if (!ASSIGNABLE_ROLES.includes(p.role)) {
+    throw new Forbidden('user.create',
+      'الدور ده مش بيتوزّع من الموقع — حساب المبرمج بيتظبط من قاعدة البيانات مباشرة.');
+  }
+
+  const name = (p.fullNameAr ?? '').trim();
+  if (name.length < 3) throw new LedgerRefused('اكتب الاسم كامل زي ما هو في سجل الملّاك');
+
+  // A number already in use is never reassigned by a create, exactly as the
+  // importer refuses it: two profiles sharing a credential is one login
+  // resolving to the wrong person.
+  const taken = await db.prepare(
+    `SELECT profile_id FROM phone_identifiers WHERE phone_e164 = ? AND status = 'active'`
+  ).bind(p.phoneE164).first<{ profile_id: string }>();
+  if (taken) {
+    throw new LedgerRefused('الرقم ده مسجّل لحساب تاني خلاص — لو ده نفس الشخص عدّل حسابه، '
+      + 'ولو الرقم اتنقل لحد تاني استخدم «غيّر رقم الموبايل».');
+  }
+
+  const id = newId('PRF');
+  const stmts: PreparedStatement[] = [
+    db.prepare(`INSERT INTO profiles (id, full_name, role, created_by) VALUES (?,?,?,?)`)
+      .bind(id, name, p.role, ctx.personId),
+    db.prepare(`INSERT INTO phone_identifiers (id, profile_id, phone_e164, changed_by)
+                VALUES (?,?,?,?)`)
+      .bind(newId('PHN'), id, p.phoneE164, ctx.personId),
+  ];
+  if (p.unitId) {
+    stmts.push(db.prepare(
+      `INSERT INTO unit_owners (id, unit_id, profile_id, valid_from) VALUES (?,?,?,?)`
+    ).bind(newId('UOW'), p.unitId, id, now().slice(0, 10)));
+  }
+
+  await mutate(db, ctx,
+    { action: 'user.create', table: 'profiles', entityId: id,
+      after: { name, role: p.role, unit: p.unitId ?? null } },
+    ...stmts,
+  );
+  return id as Id;
+}
+
+/**
+ * Fix a name.
+ *
+ * `user.create`, not `profile.edit_own`, and deliberately so: the name is what
+ * the board matches against the owner register, so a resident who could change
+ * it could make their row unfindable. This exists for the case it is actually
+ * for — the register was typed by several people over several years and some of
+ * it is wrong.
+ */
+export async function renameProfile(
+  ctx: AuthContext, db: Db, targetId: Id, fullNameAr: string,
+): Promise<void> {
+  require_(ctx.role, 'user.create');
+  const name = (fullNameAr ?? '').trim();
+  if (name.length < 3) throw new LedgerRefused('اكتب الاسم كامل زي ما هو في سجل الملّاك');
+
+  const before = await db.prepare(`SELECT full_name, role FROM profiles WHERE id=?`)
+    .bind(targetId).first<{ full_name: string; role: string }>();
+  if (!before) throw new NotFound('الحساب ده مش موجود');
+  if (before.role === 'developer' && targetId !== ctx.personId) {
+    throw new Forbidden('user.create', 'حساب المبرمج مش بيتغيّر من هنا.');
+  }
+  if (before.full_name === name) return;
+
+  await mutate(db, ctx,
+    { action: 'user.rename', table: 'profiles', entityId: targetId,
+      before: { name: before.full_name }, after: { name } },
+    db.prepare(`UPDATE profiles SET full_name=? WHERE id=?`).bind(name, targetId),
+  );
+}
+
+/**
+ * Attach a flat to an account, or detach one.
+ *
+ * Effective-dated, never overwritten: `unit_owners` carries `valid_from` and
+ * `valid_to` because a flat that changed hands in March must still show the
+ * previous owner against January's receipts. Detaching CLOSES the row with
+ * today's date; it does not delete it, and it does not touch a single payment.
+ *
+ * This is a money-shaped edit — it decides who is billed for what — so it sits
+ * with the board and is audited on both sides.
+ */
+export async function setUnitOwner(
+  ctx: AuthContext, db: Db, targetId: Id, unitId: Id | null, now: Clock,
+): Promise<void> {
+  require_(ctx.role, 'user.create');
+  const today = now().slice(0, 10);
+
+  const person = await db.prepare(`SELECT id FROM profiles WHERE id=?`).bind(targetId).first();
+  if (!person) throw new NotFound('الحساب ده مش موجود');
+
+  if (unitId) {
+    const unit = await db.prepare(`SELECT id FROM units WHERE id=? AND is_active=1`)
+      .bind(unitId).first();
+    if (!unit) throw new NotFound('الوحدة دي مش موجودة');
+    const already = await db.prepare(
+      `SELECT id FROM unit_owners WHERE profile_id=? AND unit_id=? AND valid_to IS NULL`
+    ).bind(targetId, unitId).first();
+    if (already) return;
+  }
+
+  const stmts: PreparedStatement[] = [
+    // close whatever is open, whether we are moving them or detaching them
+    db.prepare(`UPDATE unit_owners SET valid_to=? WHERE profile_id=? AND valid_to IS NULL`)
+      .bind(today, targetId),
+  ];
+  if (unitId) {
+    stmts.push(db.prepare(
+      `INSERT INTO unit_owners (id, unit_id, profile_id, valid_from) VALUES (?,?,?,?)`
+    ).bind(newId('UOW'), unitId, targetId, today));
+  }
+
+  await mutate(db, ctx,
+    { action: 'user.set_unit', table: 'unit_owners', entityId: targetId,
+      after: { unit: unitId } },
+    ...stmts,
+  );
+}
+
+/** The three things an account holder may change about themselves. */
+export interface OwnProfilePatch {
+  /** A SECOND number, for contact. Never a credential — see 0025. */
+  contactPhoneE164?: string | null;
+  preferredChannel?: 'whatsapp' | 'sms' | 'none';
+  contactNoteAr?: string | null;
+}
+
+/**
+ * What the owner of an account may edit about it.
+ *
+ * ## The security property is in the signature
+ *
+ * It takes **no target id**. There is no argument that could name another
+ * person, so no bug in a route and no crafted form field can turn this into an
+ * edit of somebody else's row — `ctx.personId` is the only identity it can
+ * reach. Compare `renameProfile` above, which takes a target and therefore
+ * needs `user.create` to guard it.
+ *
+ * ## And in the SQL
+ *
+ * The statement names three columns. `full_name`, `role`, `is_active` and
+ * `created_by` are not in it and cannot be reached through it; the login number
+ * lives in a different table entirely. So "a resident promotes themselves to
+ * admin" is not a case this function defends against — it is a case it cannot
+ * express.
+ *
+ * The board asked for exactly this line: the account holder edits their own
+ * details, but not the ones the account was created from.
+ */
+export async function updateOwnProfile(
+  ctx: AuthContext, db: Db, patch: OwnProfilePatch,
+): Promise<void> {
+  require_(ctx.role, 'profile.edit_own');
+
+  const note = patch.contactNoteAr?.trim() || null;
+  if (note && note.length > 200) {
+    throw new LedgerRefused('الملاحظة طويلة — خليها في حدود سطرين');
+  }
+  const channel = patch.preferredChannel;
+  if (channel && !['whatsapp', 'sms', 'none'].includes(channel)) {
+    throw new LedgerRefused('اختار طريقة تواصل من اللي في القايمة');
+  }
+
+  try {
+    await mutate(db, ctx,
+      { action: 'profile.update_own', table: 'profiles', entityId: ctx.personId,
+        after: { channel: channel ?? null, hasContactPhone: !!patch.contactPhoneE164,
+                 hasNote: !!note } },
+      db.prepare(
+        `UPDATE profiles
+            SET contact_phone_e164 = ?,
+                contact_note_ar    = ?,
+                preferred_channel  = COALESCE(?, preferred_channel)
+          WHERE id = ?`
+      ).bind(patch.contactPhoneE164 ?? null, note, channel ?? null, ctx.personId),
+    );
+  } catch (e) {
+    // 0025's trigger refuses a contact number that is somebody else's login
+    // number, and it says so in Arabic. Without this the control still WORKS —
+    // the write is rejected — but the resident sees a 500 instead of the
+    // sentence explaining what to do, which reads as the portal being broken
+    // rather than as their input being wrong.
+    throw asRefusal(e);
+  }
+}

@@ -317,6 +317,12 @@ export function usersPage(d: {
   people: PersonRow[];
   me: string;
   canAssignAdmin: boolean;
+  /** Flats the CREATE form can attach. One instance on the page, not one per
+   *  row — see the note on the row's unit editor. */
+  units: Array<{ id: string; label: string }>;
+  total: number;
+  offset: number;
+  limit: number;
   q?: string;
   flash?: string;
   error?: string;
@@ -353,7 +359,33 @@ export function usersPage(d: {
           esc(p.is_active ? t.users.deactivate : t.users.activate)}</button>
       </form>`}
     </span>
-  </div>`;
+  </div>
+  <!-- Name and flat behind a <details> rather than inline: they are the rarer
+       edits and this row already carries two controls. Still no JavaScript —
+       the disclosure is the element, not a script. -->
+  <details style="margin-block-end:10px">
+    <summary class="btn btn-2 btn-sm">${esc(t.users.editTitle)} — ${esc(p.full_name)}</summary>
+    <form method="post" action="/admin/users/${esc(p.id)}/rename" class="inline-form">
+      <input name="name" value="${esc(p.full_name)}" aria-label="${esc(t.users.name)}"
+             minlength="3" required>
+      <button class="btn btn-2 btn-sm" type="submit">${esc(t.users.rename)}</button>
+    </form>
+    <!-- Two number boxes, not a picker. A <select> of every flat rendered 204
+         options into each of 205 rows — 42,842 elements and a 3.3 MB page, on a
+         screen whose design target is a five-year-old Android. This is also how
+         the board says it out loud: «عمارة 22 شقة 4». -->
+    <form method="post" action="/admin/users/${esc(p.id)}/unit" class="inline-form">
+      <input name="building" inputmode="numeric" style="max-inline-size:7rem"
+             aria-label="${esc(t.users.buildingNo)}" placeholder="${esc(t.users.buildingNo)}">
+      <input name="flat" inputmode="numeric" style="max-inline-size:7rem"
+             aria-label="${esc(t.users.flatNo)}" placeholder="${esc(t.users.flatNo)}">
+      <button class="btn btn-2 btn-sm" type="submit">${esc(t.users.setUnit)}</button>
+    </form>
+    <form method="post" action="/admin/users/${esc(p.id)}/unit" class="inline-form">
+      <button class="btn btn-2 btn-sm" type="submit">${esc(t.users.unitClear)}</button>
+    </form>
+    ${p.id === d.me ? `<p class="hint">${esc(t.users.cannotSelf)}</p>` : ''}
+  </details>`;
   };
 
   return page({ title: t.users.title, active: 'home' }, `
@@ -373,9 +405,55 @@ export function usersPage(d: {
 </div>
 
 <div class="card">
+  <h3 style="margin-block-start:0">➕ ${esc(t.users.newTitle)}</h3>
+  <p class="hint">${esc(t.users.newHint)}</p>
+  <form method="post" action="/admin/users">
+    <div class="field">
+      <label for="np-name">${esc(t.users.name)}</label>
+      <input id="np-name" name="name" minlength="3" required aria-describedby="np-name-h">
+      <p class="hint" id="np-name-h">${esc(t.users.nameHint)}</p>
+    </div>
+    <div class="field">
+      <label for="np-phone">${esc(t.users.phone)}</label>
+      <input id="np-phone" name="phone" type="tel" inputmode="numeric" required
+             placeholder="01012345678" aria-describedby="np-phone-h">
+      <p class="hint" id="np-phone-h">${esc(t.users.phoneHint)}</p>
+    </div>
+    <div class="field">
+      <label for="np-role">${esc(t.users.role)}</label>
+      <select id="np-role" name="role">${roleOptions('resident')}</select>
+    </div>
+    <div class="field">
+      <label for="np-unit">${esc(t.users.unit)}</label>
+      <select id="np-unit" name="unit" aria-describedby="np-unit-h">
+        <option value="">${esc(t.users.unitNone)}</option>
+        ${d.units.map(u => `<option value="${esc(u.id)}">${esc(u.label)}</option>`).join('')}
+      </select>
+      <p class="hint" id="np-unit-h">${esc(t.users.unitHint)}</p>
+    </div>
+    <!-- Says what it does NOT do. Creating an account mints no credential, and
+         an admin who expects the new person to be able to log in immediately
+         reads the silence as a bug. -->
+    <p class="hint">${esc(t.users.createdNoLink)}</p>
+    <button class="btn" type="submit">${esc(t.users.create)}</button>
+  </form>
+</div>
+
+<div class="card">
+  <p class="muted">${msg(t.users.showing, {
+    n: String(d.people.length), total: String(d.total) })}</p>
+  ${d.total > d.people.length ? `<p class="hint">${esc(t.users.showingHint)}</p>` : ''}
   ${d.people.length === 0
     ? empty('🔍', t.users.empty, t.members.findNoneHint)
     : d.people.map(row).join('')}
+  <div class="btn-row">
+    ${d.offset > 0 ? `<a class="btn btn-2" href="/admin/users?${
+      new URLSearchParams({ q: d.q ?? '', offset: String(Math.max(d.offset - d.limit, 0)) })
+      }">${esc(t.users.back)}</a>` : ''}
+    ${d.offset + d.people.length < d.total ? `<a class="btn btn-2" href="/admin/users?${
+      new URLSearchParams({ q: d.q ?? '', offset: String(d.offset + d.limit) })
+      }">${esc(t.users.more)}</a>` : ''}
+  </div>
 </div>`);
 }
 
@@ -627,6 +705,9 @@ export const ACTION_AR: Record<string, string> = {
   'account.recover': 'استرجع حساب',
   'settlement.post': 'رحّل تسوية',
   'settlement.reverse': 'ألغى تسوية',
+  'user.rename': 'صحّح اسم',
+  'user.set_unit': 'ربط حساب بوحدة',
+  'profile.update_own': 'عدّل بيانات تواصله',
 };
 
 /** An action slug rendered in Arabic. Exported because the dashboard's activity
@@ -940,21 +1021,10 @@ export function mePage(d: {
   <p class="muted">${esc(t.me.subtitle)}</p>
   ${d.error ? banner('warn', d.error) : ''}
   ${d.flash ? banner('ok', d.flash) : ''}
-  <div class="row">
-    <span class="ico" aria-hidden="true">🛡️</span>
-    <span class="row-body"><b>${esc(t.me.role)}</b><span class="muted">${esc(d.roleAr)}</span></span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">🏢</span>
-    <span class="row-body"><b>${esc(t.me.unit)}</b>
-      <span class="muted">${esc(d.me.unit_label ?? '—')}</span></span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📱</span>
-    <span class="row-body"><b>${esc(t.me.phone)}</b>
-      <span class="muted">${d.me.phone_masked ? num(d.me.phone_masked) : '—'}</span>
-      <span class="muted">${esc(t.me.phoneHidden)}</span></span>
-  </div>
+  <!-- Role, flat and login number used to be listed here too. They now live
+       once, in the «بتتغيّر بالإدارة بس» card below, where the answer to
+       «إزاي أغيّرها» is next to them. Twice on one screen taught nothing and
+       made the page a third longer. -->
 </div>
 
 <div class="card">
@@ -980,6 +1050,65 @@ export function mePage(d: {
         </details>
       </span>
     </div>`).join('')}
+</div>
+
+<!-- The two halves of the board's rule, side by side and named as such: what
+     the owner may change, and what the account was CREATED from. Showing the
+     second as a plain read-only list is the point — «إزاي أغيّر اسمي» has an
+     answer on the screen instead of being a support conversation. -->
+<div class="card">
+  <h3 style="margin-block-start:0">✏️ ${esc(t.me.editTitle)}</h3>
+  <p class="hint">${esc(t.me.editHint)}</p>
+  <form method="post" action="/me">
+    <div class="field">
+      <label for="me-phone">${esc(t.me.contactPhone)}</label>
+      <input id="me-phone" name="contact_phone" type="tel" inputmode="numeric"
+             autocomplete="tel" value="${esc(d.me.contact_phone_e164 ?? '')}"
+             placeholder="01012345678" aria-describedby="me-phone-hint">
+      <p class="hint" id="me-phone-hint">${esc(t.me.contactPhoneHint)}</p>
+    </div>
+    <div class="field">
+      <label for="me-channel">${esc(t.me.channel)}</label>
+      <select id="me-channel" name="channel">
+        ${(['whatsapp', 'sms', 'none'] as const).map(c => `<option value="${c}"${
+          d.me.preferred_channel === c ? ' selected' : ''}>${esc(
+          c === 'whatsapp' ? t.me.channelWhatsapp
+          : c === 'sms' ? t.me.channelSms : t.me.channelNone)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label for="me-note">${esc(t.me.note)}</label>
+      <input id="me-note" name="note" maxlength="200" dir="auto"
+             value="${esc(d.me.contact_note_ar ?? '')}" aria-describedby="me-note-hint">
+      <p class="hint" id="me-note-hint">${esc(t.me.noteHint)}</p>
+    </div>
+    <button class="btn" type="submit">${esc(t.me.savePrefs)}</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🔒 ${esc(t.me.lockedTitle)}</h3>
+  <p class="hint">${esc(t.me.lockedHint)}</p>
+  <div class="row">
+    <span class="ico" aria-hidden="true">📛</span>
+    <span class="row-body"><b>${esc(t.me.lockedName)}</b>
+      <span class="muted">${esc(d.me.full_name)}</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🔑</span>
+    <span class="row-body"><b>${esc(t.me.lockedPhone)}</b>
+      <span class="muted">${d.me.phone_masked ? num(d.me.phone_masked) : '—'}</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🛡️</span>
+    <span class="row-body"><b>${esc(t.me.lockedRole)}</b>
+      <span class="muted">${esc(d.roleAr)}</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🏢</span>
+    <span class="row-body"><b>${esc(t.me.lockedUnit)}</b>
+      <span class="muted">${esc(d.me.unit_label ?? '—')}</span></span>
+  </div>
 </div>
 
 <div class="card">

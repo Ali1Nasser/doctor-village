@@ -48,6 +48,17 @@ def build():
     db.commit()
     return db
 
+
+# Placeholders counted from the row, never hardcoded. They WERE hardcoded, and
+# migration 0025 adding two columns to `profiles` broke three separate copies —
+# a fixture that fails for a reason unrelated to what it tests is a fixture
+# people learn to edit past instead of read.
+def copy_table(src, dst, table):
+    rows = src.execute(f"SELECT * FROM {table}").fetchall()
+    if not rows: return
+    marks = ",".join("?" * len(rows[0]))
+    dst.executemany(f"INSERT INTO {table} VALUES ({marks})", rows)
+
 # =============================================================================
 print("\n=== 1. Schema loads on a real SQLite engine ===")
 # =============================================================================
@@ -150,7 +161,7 @@ check("re-pointing an existing deposit category at income is REJECTED", err is n
 db2 = build()
 db2.executescript("DROP TRIGGER trg_category_account_kind_ins;")
 for r in db.execute("SELECT * FROM accounts"):
-    db2.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)", r)
+    db2.execute("INSERT INTO accounts VALUES (" + ",".join("?" * len(r)) + ")", r)
 db2.commit()
 err2 = raises(db2, "INSERT INTO categories (id,name_ar,direction,kind,ledger_account_id) VALUES (?,?,?,?,?)",
               (uid("CATX", 1), "وديعة غلط", "income", "deposit", uid("ACC", 8)))
@@ -229,8 +240,8 @@ check("maker-checker: the creator cannot approve their own entry", err is not No
 # --- watch it fail first ------------------------------------------------------
 db3 = build()
 db3.executescript("DROP TRIGGER trg_entry_balanced;")
-for r in db.execute("SELECT * FROM accounts"): db3.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)", r)
-for r in db.execute("SELECT * FROM profiles"): db3.execute("INSERT INTO profiles VALUES (?,?,?,?,?,?,?,?,?)", r)
+copy_table(db, db3, "accounts")
+copy_table(db, db3, "profiles")
 db3.execute("INSERT INTO fiscal_periods (id,name_ar,starts_on,ends_on) VALUES (?,?,?,?)",
             (uid("FPR", 1), "سنة 2026", "2026-01-01", "2026-12-31"))
 db3.commit()
@@ -354,10 +365,7 @@ print("\n=== 8. ⚠️ The accounting equation is a TAUTOLOGY — proving it ===
 # eleven combined". Build the SAME ledger with الوديعة deliberately booked to
 # income and see whether that claim survives.
 bad = build()
-for r in db.execute("SELECT * FROM accounts"):        bad.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)", r)
-for r in db.execute("SELECT * FROM profiles"):        bad.execute("INSERT INTO profiles VALUES (?,?,?,?,?,?,?,?,?)", r)
-for r in db.execute("SELECT * FROM buildings"):       bad.execute("INSERT INTO buildings VALUES (?,?,?,?,?)", r)
-for r in db.execute("SELECT * FROM units"):           bad.execute("INSERT INTO units VALUES (?,?,?,?,?,?)", r)
+for tbl in ("accounts", "profiles", "buildings", "units"): copy_table(db, bad, tbl)
 for r in db.execute("SELECT * FROM funds"):           bad.execute("INSERT INTO funds VALUES (?,?,?,?,?)", r)
 # Categories too: the entries below name real receipts and vouchers now, and a
 # payment needs a category. Copied generically so a column added to `categories`

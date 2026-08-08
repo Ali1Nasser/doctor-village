@@ -42,6 +42,9 @@ const F_OP = 'FND00000000000000000000001';
 let raw: DatabaseSync;
 let db: NodeSqliteDb;
 let admin: AuthContext, admin2: AuthContext, operator: AuthContext, dev: AuthContext;
+// The resident context exists so self-service can be driven AS the owner —
+// `updateOwnProfile` takes no target, so it can only be tested from their side.
+let resident: AuthContext;
 
 async function ctxFor(token: string): Promise<AuthContext> {
   const c = await resolveAuthContext(db, token, NOW);
@@ -85,6 +88,7 @@ before(async () => {
   db = new NodeSqliteDb(raw as never);
   dev = await ctxFor('dev'); admin = await ctxFor('admin');
   admin2 = await ctxFor('admin2'); operator = await ctxFor('op');
+  resident = await ctxFor('res');
 });
 
 /* ================================================================== */
@@ -308,6 +312,126 @@ describe('every mutating path leaves an audit trail', () => {
     assert.equal(auditCount(), before + 2);
   });
 
+  /* ---- accounts: created by the board, one corner edited by the owner ---- */
+
+  it('createProfile makes an account that cannot yet be logged into', async () => {
+    const before = auditCount();
+    const newId_ = await m.createProfile(admin, db, {
+      fullNameAr: 'د. منى الغنيمي', phoneE164: '+201033333333', role: 'resident',
+      unitId: U1 as never,
+    }, NOW);
+    assert.equal(lastAudit().action, 'user.create');
+    assert.equal(auditCount(), before + 1);
+
+    const row = raw.prepare(`SELECT full_name, role, created_by FROM profiles WHERE id=?`)
+      .get(newId_) as { full_name: string; role: string; created_by: string };
+    assert.equal(row.role, 'resident');
+    assert.equal(row.created_by, P_ADMIN, 'the creator is not on the record');
+    assert.equal((raw.prepare(
+      `SELECT COUNT(*) n FROM unit_owners WHERE profile_id=? AND valid_to IS NULL`)
+      .get(newId_) as { n: number }).n, 1, 'the flat was not attached');
+
+    // Creating an account mints NO credential. Until the board issues an
+    // activation link there is nothing to log in with, which is what keeps
+    // "create an account" from being "create a way in".
+    assert.equal((raw.prepare(`SELECT COUNT(*) n FROM passkeys WHERE profile_id=?`)
+      .get(newId_) as { n: number }).n, 0);
+    assert.equal((raw.prepare(
+      `SELECT COUNT(*) n FROM activation_challenges WHERE profile_id=?`)
+      .get(newId_) as { n: number }).n, 0);
+  });
+
+  it('a phone already in use cannot be handed to a second account', async () => {
+    const before = auditCount();
+    await assert.rejects(() => m.createProfile(admin, db, {
+      fullNameAr: 'شخص تاني', phoneE164: '+201011111111', role: 'resident',
+    }, NOW), /مسجّل لحساب تاني/, 'two profiles were given the same credential');
+    assert.equal(auditCount(), before, 'a refused create still wrote an audit row');
+  });
+
+  it('an operator cannot create an account, and nobody mints an admin cheaply', async () => {
+    await assert.rejects(() => m.createProfile(operator, db, {
+      fullNameAr: 'حد', phoneE164: '+201044444444', role: 'resident',
+    }, NOW), /صلاحيات|forbidden/);
+    // `assignRole` guards admin behind user.assign_admin_role; creating one has
+    // to cost the same, or "create an admin" is the way around that check.
+    await assert.rejects(() => m.createProfile(admin, db, {
+      fullNameAr: 'أدمن جديد', phoneE164: '+201044444444', role: 'admin',
+    }, NOW), /صلاحيات|forbidden/, 'an admin minted another admin at creation');
+  });
+
+  it('renameProfile fixes the register, and records what it changed from', async () => {
+    const before = auditCount();
+    await m.renameProfile(admin, db, P_RES as never, 'ساكن الشناوي');
+    assert.equal(lastAudit().action, 'user.rename');
+    // A rename that does not record what it renamed FROM is not a correction,
+    // it is a substitution — `lastAudit()` projects only a few columns, so the
+    // before-image is read straight from the row.
+    const beforeJson = (raw.prepare(
+      `SELECT before_json FROM audit_log ORDER BY created_at DESC, rowid DESC LIMIT 1`)
+      .get() as { before_json: string | null }).before_json;
+    assert.match(String(beforeJson), /ساكن/, 'the previous name is not on the record');
+    assert.equal(auditCount(), before + 1);
+    await assert.rejects(() => m.renameProfile(admin, db, P_RES as never, 'أ'),
+      /الاسم كامل/, 'a one-letter name was accepted into the register');
+  });
+
+  it('setUnitOwner closes the old row rather than overwriting it', async () => {
+    const u2 = (raw.prepare(`SELECT id FROM units WHERE id <> ? LIMIT 1`).get(U1) as
+      { id: string } | undefined);
+    if (!u2) return;
+    await m.setUnitOwner(admin, db, P_RES as never, u2.id as never, NOW);
+    assert.equal(lastAudit().action, 'user.set_unit');
+
+    // The January receipt still has to name whoever owned the flat in January.
+    const old = raw.prepare(
+      `SELECT valid_to FROM unit_owners WHERE profile_id=? AND unit_id=?`)
+      .get(P_RES, U1) as { valid_to: string | null };
+    assert.ok(old.valid_to, 'the previous ownership row was deleted, not closed');
+    assert.equal((raw.prepare(
+      `SELECT COUNT(*) n FROM unit_owners WHERE profile_id=? AND valid_to IS NULL`)
+      .get(P_RES) as { n: number }).n, 1, 'a person ended up owning two flats at once');
+  });
+
+  it('updateOwnProfile can reach three columns and no others', async () => {
+    const before = auditCount();
+    const nameBefore = (raw.prepare(`SELECT full_name FROM profiles WHERE id=?`)
+      .get(P_RES) as { full_name: string }).full_name;
+
+    await m.updateOwnProfile(resident, db, {
+      contactPhoneE164: '+201055555555',
+      preferredChannel: 'sms',
+      contactNoteAr: 'الشقة مؤجرة — كلّموني على الرقم ده',
+    });
+    assert.equal(lastAudit().action, 'profile.update_own');
+    assert.equal(auditCount(), before + 1);
+
+    const after = raw.prepare(
+      `SELECT full_name, role, is_active, contact_phone_e164, preferred_channel, contact_note_ar
+         FROM profiles WHERE id=?`).get(P_RES) as Record<string, unknown>;
+    assert.equal(after['contact_phone_e164'], '+201055555555');
+    assert.equal(after['preferred_channel'], 'sms');
+    assert.match(String(after['contact_note_ar']), /مؤجرة/);
+
+    // The wall. These are creation facts and this function cannot express them.
+    assert.equal(after['full_name'], nameBefore, 'self-edit changed the register name');
+    assert.equal(after['role'], 'resident', 'self-edit changed a role');
+    assert.equal(after['is_active'], 1);
+    // …and the credential lives in another table entirely.
+    assert.equal((raw.prepare(
+      `SELECT phone_e164 FROM phone_identifiers WHERE profile_id=? AND status='active'`)
+      .get(P_RES) as { phone_e164: string }).phone_e164, '+201011111111',
+      'self-edit reached the LOGIN number');
+  });
+
+  it("a contact number may not be somebody else's login number", async () => {
+    // Nothing would be breached — a contact column cannot open a session — but
+    // the board's «كلّم صاحب الوحدة» would dial the wrong person.
+    await assert.rejects(() => m.updateOwnProfile(resident, db, {
+      contactPhoneE164: '+201099999999',        // the chairman's login number
+    }), /مسجّل لحد تاني/, "a resident claimed the chairman's number as their contact");
+  });
+
   it('EVERY function named in MUTATING_FUNCTIONS was exercised above', () => {
     // Enumerated on purpose: adding a mutation without adding it here — and
     // therefore without a coverage test — fails this assertion.
@@ -316,6 +440,7 @@ describe('every mutating path leaves an audit trail', () => {
       'grantDelegate', 'revokeDelegate', 'assignRole', 'revokeAllSessions',
       'updateSettings', 'changePhoneNumber',
       'createCategory', 'activateCategory', 'setPersonActive', 'addStaff', 'endStaff',
+      'createProfile', 'renameProfile', 'setUnitOwner', 'updateOwnProfile',
     ]);
     for (const name of m.MUTATING_FUNCTIONS) {
       assert.ok(exercised.has(name), `${name} has no audit-coverage test`);

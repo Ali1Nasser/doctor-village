@@ -551,27 +551,72 @@ header .htext{flex:1;min-inline-size:0}
   <p class="muted">بياناتك، أجهزتك، وطريقة دخولك</p>
   
   
-  <div class="row">
-    <span class="ico" aria-hidden="true">🛡️</span>
-    <span class="row-body"><b>الدور</b><span class="muted">ساكن</span></span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">🏢</span>
-    <span class="row-body"><b>الوحدة</b>
-      <span class="muted">عمارة 14 — 5</span></span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📱</span>
-    <span class="row-body"><b>رقم الموبايل</b>
-      <span class="muted"><bdi dir="ltr" class="num">••••010</bdi></span>
-      <span class="muted">متسجّل عندنا ومش بيظهر لحد غير الإدارة</span></span>
-  </div>
+  <!-- Role, flat and login number used to be listed here too. They now live
+       once, in the «بتتغيّر بالإدارة بس» card below, where the answer to
+       «إزاي أغيّرها» is next to them. Twice on one screen taught nothing and
+       made the page a third longer. -->
 </div>
 
 <div class="card">
   <h3 style="margin-block-start:0">🔑 الأجهزة المسجّلة</h3>
   <p class="hint">كل جهاز دخلت منه ببصمتك. لو فيه جهاز مش بتاعك بلّغ الإدارة فورًا.</p>
   <div class="empty"><div class="big" aria-hidden="true">🔑</div><p>مفيش أجهزة مسجّلة</p><p class="muted">هتظهر هنا أول ما تفعّل بصمة على جهاز.</p></div>
+</div>
+
+<!-- The two halves of the board's rule, side by side and named as such: what
+     the owner may change, and what the account was CREATED from. Showing the
+     second as a plain read-only list is the point — «إزاي أغيّر اسمي» has an
+     answer on the screen instead of being a support conversation. -->
+<div class="card">
+  <h3 style="margin-block-start:0">✏️ بيانات التواصل</h3>
+  <p class="hint">دي الحاجات اللي تقدر تغيّرها بنفسك في أي وقت.</p>
+  <form method="post" action="/me">
+    <div class="field">
+      <label for="me-phone">رقم تاني للتواصل</label>
+      <input id="me-phone" name="contact_phone" type="tel" inputmode="numeric"
+             autocomplete="tel" value=""
+             placeholder="01012345678" aria-describedby="me-phone-hint">
+      <p class="hint" id="me-phone-hint">اختياري. ده مش رقم الدخول — رقم الدخول بيتغيّر بالإدارة بس.</p>
+    </div>
+    <div class="field">
+      <label for="me-channel">تحب نكلّمك إزاي</label>
+      <select id="me-channel" name="channel">
+        <option value="whatsapp" selected>واتساب</option><option value="sms">رسالة نصية</option><option value="none">متكلّمونيش</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="me-note">ملاحظة للإدارة</label>
+      <input id="me-note" name="note" maxlength="200" dir="auto"
+             value="" aria-describedby="me-note-hint">
+      <p class="hint" id="me-note-hint">سطر واحد. مثلاً: «الشقة مؤجرة» أو «مسافر برّه، كلّموا ابني».</p>
+    </div>
+    <button class="btn" type="submit">احفظ</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🔒 الحاجات دي بتتغيّر بالإدارة بس</h3>
+  <p class="hint">دي البيانات اللي الحساب اتعمل عليها. لو فيها غلط كلّم الإدارة وهي تصلّحه، وكل تعديل بيتسجّل في السجل.</p>
+  <div class="row">
+    <span class="ico" aria-hidden="true">📛</span>
+    <span class="row-body"><b>الاسم زي ما هو في سجل الملّاك</b>
+      <span class="muted">د. عمرو شاهين</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🔑</span>
+    <span class="row-body"><b>رقم الدخول</b>
+      <span class="muted"><bdi dir="ltr" class="num">••••010</bdi></span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🛡️</span>
+    <span class="row-body"><b>الدور والصلاحيات</b>
+      <span class="muted">ساكن</span></span>
+  </div>
+  <div class="row">
+    <span class="ico" aria-hidden="true">🏢</span>
+    <span class="row-body"><b>الوحدة المربوطة بالحساب</b>
+      <span class="muted">عمارة 14 — 5</span></span>
+  </div>
 </div>
 
 <div class="card">
