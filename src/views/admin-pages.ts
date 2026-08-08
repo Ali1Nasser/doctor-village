@@ -708,6 +708,10 @@ export const ACTION_AR: Record<string, string> = {
   'user.rename': 'صحّح اسم',
   'user.set_unit': 'ربط حساب بوحدة',
   'profile.update_own': 'عدّل بيانات تواصله',
+  'password.issue': 'بعت كلمة سر مؤقتة',
+  'password.change': 'غيّر كلمة سره',
+  'password.clear': 'شال كلمة السر من حسابه',
+  'recovery_code.reissue': 'جدّد أكواد الاسترجاع',
 };
 
 /** An action slug rendered in Arabic. Exported because the dashboard's activity
@@ -1011,6 +1015,13 @@ export function helpPage(d: {
 export function mePage(d: {
   me: MyAccount;
   roleAr: string;
+  /** null = no password on this account, which is the design's normal state. */
+  password?: { isTemporary: boolean } | null;
+  /** How many printed codes are still unused. A count, never the codes. */
+  codesLeft?: number;
+  /** Set ONLY on the response that generated them — the one and only render
+   *  where the plaintext exists. Never read back from the database. */
+  freshCodes?: string[];
   flash?: string;
   error?: string;
 }): string {
@@ -1129,6 +1140,63 @@ export function mePage(d: {
      person has, which is what you want when the phone is in somebody else's
      hand. Until now only the second existed, so "log out of my son's tablet"
      meant logging out of your own phone too. -->
+<!-- The second way in. Passkeys are the design and this is the fallback for a
+     phone that cannot hold one — so the card says which state the account is
+     in, and a still-temporary password is called out in warning colours: it
+     travelled through WhatsApp, and whoever sent it read it. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🔑 ${esc(t.me.passwordTitle)}</h3>
+  ${d.password == null
+    ? `<p class="muted">${esc(t.me.passwordNone)}</p>`
+    : `${d.password.isTemporary
+        ? banner('warn', t.me.passwordTemp)
+        : `<p class="muted">${esc(t.me.passwordMine)}</p>`}
+    <form method="post" action="/me/password">
+      <div class="field">
+        <label for="pw-cur">${esc(t.me.currentPassword)}</label>
+        <input id="pw-cur" name="current" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label for="pw-new">${esc(t.me.newPassword)}</label>
+        <input id="pw-new" name="next" type="password" autocomplete="new-password"
+               minlength="8" required aria-describedby="pw-new-h">
+        <p class="hint" id="pw-new-h">${esc(t.me.newPasswordHint)}</p>
+      </div>
+      <button class="btn" type="submit">${esc(t.me.changePassword)}</button>
+    </form>
+    <form method="post" action="/me/password/drop" style="margin-block-start:14px">
+      <p class="hint">${esc(t.me.dropPasswordHint)}</p>
+      <button class="btn btn-2" type="submit">${esc(t.me.dropPassword)}</button>
+    </form>`}
+</div>
+
+<!-- The third way in, and the only one that survives losing the phone entirely.
+     Codes used to be printed once, at activation, and never again: somebody who
+     spent them, or lost the paper, or was given a password instead of an
+     activation link had nothing — and the «ادخل بكود» box on the login screen
+     was addressed to a person who could not exist. This is that place. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🖨️ ${esc(t.me.codesTitle)}</h3>
+  <p class="hint">${esc(t.me.codesHint)}</p>
+  ${d.freshCodes && d.freshCodes.length > 0 ? `
+  ${banner('ok', t.me.codesIssued)}
+  <table><tbody>
+    ${d.freshCodes.map(c => `<tr><td class="n">${num(c)}</td></tr>`).join('')}
+  </tbody></table>
+  <button class="btn btn-2" type="button" onclick="window.print()">${esc(t.me.codesPrint)}</button>
+  ` : (d.codesLeft ?? 0) > 0
+    ? `<div class="row">
+    <span class="ico" aria-hidden="true">🎟️</span>
+    <span class="row-body"><b>${esc(t.me.codesLeft)}</b>
+      <span class="muted">${num(String(d.codesLeft ?? 0))}</span></span>
+  </div>`
+    : `<p class="muted">${esc(t.me.codesNone)}</p>`}
+  <form method="post" action="/me/recovery-codes" style="margin-block-start:14px">
+    <p class="hint">${esc(t.me.codesNewHint)}</p>
+    <button class="btn${d.freshCodes ? ' btn-2' : ''}" type="submit">${esc(t.me.codesNew)}</button>
+  </form>
+</div>
+
 <div class="card">
   <h3 style="margin-block-start:0">↪ ${esc(t.shell.signOut)}</h3>
   <form method="post" action="/logout">

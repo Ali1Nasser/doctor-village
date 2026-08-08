@@ -63,6 +63,34 @@ export function loginPage(error?: string, notice?: string): string {
   </form>
   <p class="hint">${esc(t.login.explainer)}</p>
 </div>
+
+<!-- The second and third doors, named on the screen rather than left as URLs
+     only the board knows. A resident whose phone cannot hold a passkey — and
+     they exist, which is why passwords exist at all — used to arrive here with
+     nothing to do. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🔑 ${esc(t.login.orPassword)}</h3>
+  <form method="post" action="/login/password">
+    <div class="field">
+      <label for="pw-phone">${esc(t.login.phoneLabel)}</label>
+      <input id="pw-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel"
+             placeholder="${esc(t.login.phonePlaceholder)}" required>
+    </div>
+    <div class="field">
+      <label for="pw">${esc(t.login.passwordLabel)}</label>
+      <input id="pw" name="password" type="password" autocomplete="current-password"
+             required aria-describedby="pw-hint">
+      <p class="hint" id="pw-hint">${esc(t.login.passwordHint)}</p>
+    </div>
+    <button class="btn btn-2" type="submit">${esc(t.login.passwordSubmit)}</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🆘 ${esc(t.login.haveCode)}</h3>
+  <p class="muted">${esc(t.login.haveCodeBody)}</p>
+  <a class="btn btn-2" href="/login/recover">${esc(t.login.useCode)}</a>
+</div>
 <div class="card">
   <p class="muted" style="margin-block-start:0">${esc(t.login.firstTime)}</p>
   <a class="btn btn-2" href="/help">💬 ${esc(t.login.helpBoard)}</a>

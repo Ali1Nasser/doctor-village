@@ -554,6 +554,8 @@ export const MUTATING_FUNCTIONS = [
   'revokeAllSessions', 'updateSettings',
   'createCategory', 'activateCategory', 'setPersonActive', 'addStaff', 'endStaff',
   'createProfile', 'renameProfile', 'setUnitOwner', 'updateOwnProfile',
+  'issueTemporaryPassword', 'changeOwnPassword', 'dropOwnPassword',
+  'reissueOwnRecoveryCodes',
 ] as const;
 
 /* ===================================================================== */
@@ -781,4 +783,167 @@ export async function updateOwnProfile(
     // rather than as their input being wrong.
     throw asRefusal(e);
   }
+}
+
+/* ===================================================================== */
+/* Passwords — issued by the board, replaced by the owner (0026)         */
+/* ===================================================================== */
+
+/**
+ * Hand somebody a temporary password.
+ *
+ * Same shape as an activation link and for the same reasons: the board does
+ * not choose it, it is shown exactly once, and only a hash is kept — so "send
+ * it to me again" is not a feature that was left out, it is a thing the
+ * product genuinely cannot do.
+ *
+ * `user.create` rather than a capability of its own. Issuing a credential for
+ * somebody else's account is the same power as creating the account, and a
+ * separate capability would be one more thing to get wrong in `rbac.ts` for no
+ * gain.
+ *
+ * Note what this does NOT do: it does not revoke sessions or passkeys. A
+ * resident whose fingerprint stopped working still has their existing session,
+ * and taking it away because the board handed them a second way in would be a
+ * punishment for asking for help. Recovery is the flow that revokes things,
+ * deliberately and with two signatures.
+ */
+export async function issueTemporaryPassword(
+  ctx: AuthContext, db: Db, targetId: Id,
+  hash: (p: string) => Promise<{ salt: string; hash: string; iterations: number }>,
+  generate: () => string,
+  now: Clock,
+): Promise<{ password: string; fullName: string }> {
+  require_(ctx.role, 'user.create');
+
+  const p = await db.prepare(
+    `SELECT full_name, role FROM profiles WHERE id = ? AND is_active = 1`
+  ).bind(targetId).first<{ full_name: string; role: string }>();
+  if (!p) throw new NotFound('العضو ده مش موجود');
+  if (p.role === 'developer' && targetId !== ctx.personId) {
+    throw new Forbidden('user.create', 'حساب المبرمج مش بيتظبط من هنا.');
+  }
+
+  const password = generate();
+  await mutate(db, ctx,
+    { action: 'password.issue', table: 'passwords', entityId: targetId,
+      after: { temporary: true } },
+    db.prepare(
+      `INSERT INTO passwords (profile_id, salt, hash, iterations, is_temporary, set_by, set_at)
+       VALUES (?,?,?,?,1,?,?)
+       ON CONFLICT(profile_id) DO UPDATE SET
+         salt = excluded.salt, hash = excluded.hash, iterations = excluded.iterations,
+         is_temporary = 1, set_by = excluded.set_by, set_at = excluded.set_at,
+         last_used_at = NULL`
+    ).bind(targetId, ...await hash(password).then(h => [h.salt, h.hash, h.iterations] as const),
+           ctx.personId, now()),
+  );
+  return { password, fullName: p.full_name };
+}
+
+/**
+ * The owner replaces the board's password with their own.
+ *
+ * Takes no target id, for the same reason `updateOwnProfile` does not: there is
+ * no argument that could name somebody else, so this cannot become an edit of
+ * another account however a route calls it.
+ *
+ * The CURRENT password is required even though the caller already holds a
+ * session. A session is "this phone is unlocked"; a password change is "this
+ * account now answers to a secret I chose". Somebody handed an unlocked phone
+ * for a minute should not be able to convert that into permanent access, and
+ * asking for the current one is what stops it.
+ */
+export async function changeOwnPassword(
+  ctx: AuthContext, db: Db,
+  current: string, next: string,
+  verify: (p: string, stored: { salt: string; hash: string; iterations: number })
+    => Promise<boolean>,
+  hash: (p: string) => Promise<{ salt: string; hash: string; iterations: number }>,
+  now: Clock,
+): Promise<void> {
+  require_(ctx.role, 'profile.edit_own');
+
+  const stored = await db.prepare(
+    `SELECT salt, hash, iterations FROM passwords WHERE profile_id = ?`
+  ).bind(ctx.personId).first<{ salt: string; hash: string; iterations: number }>();
+  if (!stored) {
+    throw new LedgerRefused('مفيش كلمة سر على حسابك — اطلب من الإدارة تبعتلك واحدة.');
+  }
+  if (!await verify(current, stored)) {
+    throw new LedgerRefused('كلمة السر الحالية غلط.');
+  }
+
+  const h = await hash(next);
+  await mutate(db, ctx,
+    { action: 'password.change', table: 'passwords', entityId: ctx.personId,
+      after: { temporary: false } },
+    db.prepare(
+      `UPDATE passwords SET salt = ?, hash = ?, iterations = ?, is_temporary = 0,
+                            set_by = ?, set_at = ?, last_used_at = NULL
+        WHERE profile_id = ?`
+    ).bind(h.salt, h.hash, h.iterations, ctx.personId, now(), ctx.personId),
+  );
+}
+
+/**
+ * Turn the second door off again.
+ *
+ * The owner's own choice, and worth offering: somebody who got a working
+ * passkey after using a temporary password should be able to remove the weaker
+ * credential rather than leave it lying against their account forever.
+ */
+export async function dropOwnPassword(ctx: AuthContext, db: Db): Promise<void> {
+  require_(ctx.role, 'profile.edit_own');
+  await mutate(db, ctx,
+    { action: 'password.clear', table: 'passwords', entityId: ctx.personId },
+    db.prepare(`DELETE FROM passwords WHERE profile_id = ?`).bind(ctx.personId),
+  );
+}
+
+/**
+ * A fresh set of printed recovery codes, asked for by the owner.
+ *
+ * Until now codes were handed out at exactly one moment — the activation link —
+ * and never again. Three things follow from that, all of them bad:
+ *
+ *   · somebody who used a code, or four, has no way to get back to six;
+ *   · somebody who lost the paper has no way to replace it, and their only
+ *     remaining route is the two-admin assisted recovery — the most abuse-prone
+ *     path in the system, reached for a reason that did not need it;
+ *   · somebody the board gave a PASSWORD to rather than an activation link
+ *     never had codes at all, so the «استخدم كود» box on the login screen was
+ *     addressed to nobody.
+ *
+ * The retire-then-insert is `issueRecoveryCodes`'s rule and it holds here for
+ * the same reason: the resident's model is "here are my codes", replacing. Six
+ * live codes on the fridge and six more in a WhatsApp message from last year is
+ * twelve passkey bypasses nobody is counting.
+ *
+ * Hashes come in already computed. `lib/db/` does not hash — the code itself
+ * must never reach this file, because the whole property of a printed code is
+ * that the server cannot reproduce it.
+ */
+export async function reissueOwnRecoveryCodes(
+  ctx: AuthContext, db: Db, hashes: string[], now: Clock,
+): Promise<void> {
+  require_(ctx.role, 'profile.edit_own');
+  if (hashes.length === 0) throw new LedgerRefused('مفيش أكواد اتولدت');
+
+  const live = await db.prepare(
+    `SELECT COUNT(*) n FROM recovery_codes WHERE profile_id = ? AND used_at IS NULL`
+  ).bind(ctx.personId).first<{ n: number }>();
+
+  await mutate(db, ctx,
+    { action: 'recovery_code.reissue', table: 'recovery_codes', entityId: ctx.personId,
+      before: { live: live?.n ?? 0 }, after: { live: hashes.length } },
+    // Retire the previous set FIRST: between these two statements there is no
+    // moment with eleven live codes, because `mutate` runs the whole batch as
+    // one transaction.
+    db.prepare(`UPDATE recovery_codes SET used_at = ? WHERE profile_id = ? AND used_at IS NULL`)
+      .bind(now(), ctx.personId),
+    ...hashes.map(h => db.prepare(
+      `INSERT INTO recovery_codes (id, profile_id, code_hash) VALUES (?,?,?)`
+    ).bind(newId('RCV'), ctx.personId, h)),
+  );
 }

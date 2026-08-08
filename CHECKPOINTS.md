@@ -131,6 +131,17 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
       change and why. `updateOwnProfile` takes no target id and its SQL names three columns, so
       the wall is structural rather than checked; `tests/access/accounts.test.ts` attacks it
       through the form.
+- [x] **A second and a third way in, for phones that cannot hold a passkey** (2026-08-08,
+      migration `0026`). `AGENTS.md` bans password auth; the owner overrode it on the record
+      after R-107 proved a phone with no platform authenticator cannot enrol at all. It is built
+      as explicitly *second*: no password exists until an admin issues one on `/admin/members`,
+      the board never chooses it and can never see it twice (PBKDF2-SHA256, 210,000 iterations,
+      cost stored per row), five guesses per 15 minutes per IP **and** per number, a wrong
+      password and an unknown number answer identically, and two triggers delete it when the
+      account is stopped or a recovery is fulfilled. Recovery codes are now reprintable from
+      `/me` — before this they existed only at activation, so the «ادخل بكود» box on the login
+      screen was addressed to a person who could not exist. 18 tests in
+      `tests/access/password.test.ts`.
 - [x] Login UI per `04_UX_SPEC.md` §3 — "الدخول ببصمة أو قفل الموبايل" (screen renders; the
       WebAuthn call behind the button is still to come)
 - [x] Session middleware, route guards, `lib/rbac.ts` as the single source of permission truth
@@ -143,6 +154,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 
 **Gates**
 - [ ] All four roles activate once, then log in **with a passkey** on a **real phone**
+- [x] **Nobody is locked out by their hardware.** Three ways in, in order of preference:
+      passkey, board-issued password, printed recovery code. Each is separately tested, and the
+      weaker two are rate-limited harder than the strongest.
 - [x] **The board-issued link works with WhatsApp switched off entirely** — it is off and
       always was; `enabledChannels()` returns board_link, printed, console
 - [~] A replayed WebAuthn assertion is rejected; origin/RP-ID binding verified — **the

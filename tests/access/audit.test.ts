@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { NodeSqliteDb } from '../../lib/db/driver.js';
 import { setTokenHasher, resolveAuthContext, newId } from '../../lib/db/index.js';
 import * as m from '../../lib/db/mutations.js';
+import * as pw from '../../lib/auth/password.js';
 import * as av from '../../src/views/admin-pages.js';
 import type { AuthContext } from '../../types/domain.js';
 
@@ -432,6 +433,69 @@ describe('every mutating path leaves an audit trail', () => {
     }), /مسجّل لحد تاني/, "a resident claimed the chairman's number as their contact");
   });
 
+  /* ---- the second and third ways in ----------------------------------- */
+
+  it('issuing, changing and clearing a password are each on the record', async () => {
+    const before = auditCount();
+
+    const { password } = await m.issueTemporaryPassword(
+      admin, db, P_RES as never, pw.hashPassword, pw.generatePassword, NOW);
+    assert.equal(lastAudit().action, 'password.issue');
+    assert.equal(lastAudit().actor_id, P_ADMIN,
+      'the board member who handed out the credential is not named');
+
+    // Stored as a hash and flagged as the board's, so «لسه بالمؤقتة» is
+    // answerable without asking anybody.
+    const row = raw.prepare(
+      `SELECT hash, is_temporary, set_by FROM passwords WHERE profile_id=?`).get(P_RES) as
+      { hash: string; is_temporary: number; set_by: string };
+    assert.notEqual(row.hash, password, 'the password was stored in the clear');
+    assert.equal(row.is_temporary, 1);
+    assert.equal(row.set_by, P_ADMIN);
+
+    // The owner replaces it — and must prove they know the current one, because
+    // a session is "this phone is unlocked", not "I chose this secret".
+    await assert.rejects(() => m.changeOwnPassword(resident, db, 'NOPE-NOPE-NOPE',
+      'قرية الأطباء ٢٠٢٦', pw.verifyPassword, pw.hashPassword, NOW), /الحالية غلط/);
+    await m.changeOwnPassword(resident, db, password, 'قرية الأطباء ٢٠٢٦',
+      pw.verifyPassword, pw.hashPassword, NOW);
+    assert.equal(lastAudit().action, 'password.change');
+    assert.equal(lastAudit().actor_id, P_RES);
+    assert.equal((raw.prepare(`SELECT is_temporary FROM passwords WHERE profile_id=?`)
+      .get(P_RES) as { is_temporary: number }).is_temporary, 0);
+
+    // …and can turn the second door off again once a passkey works.
+    await m.dropOwnPassword(resident, db);
+    assert.equal(lastAudit().action, 'password.clear');
+    assert.equal(raw.prepare(`SELECT 1 FROM passwords WHERE profile_id=?`).get(P_RES),
+      undefined);
+
+    assert.equal(auditCount(), before + 3, 'a refused change wrote an audit row');
+  });
+
+  it('reissuing recovery codes retires the previous sheet in the same batch', async () => {
+    const before = auditCount();
+    const live = () => (raw.prepare(
+      `SELECT COUNT(*) n FROM recovery_codes WHERE profile_id=? AND used_at IS NULL`)
+      .get(P_RES) as { n: number }).n;
+
+    await m.reissueOwnRecoveryCodes(resident, db, ['h1', 'h2', 'h3'], NOW);
+    assert.equal(lastAudit().action, 'recovery_code.reissue');
+    assert.equal(lastAudit().actor_id, P_RES);
+    assert.equal(live(), 3);
+
+    // Six on the fridge plus six from last year is twelve passkey bypasses
+    // nobody is counting. A new sheet REPLACES.
+    await m.reissueOwnRecoveryCodes(resident, db, ['h4', 'h5', 'h6'], NOW);
+    assert.equal(live(), 3, 'the old sheet stayed live beside the new one');
+    assert.equal(auditCount(), before + 2);
+
+    // An operator has `profile.edit_own` too — and that is the point: this
+    // reaches only the caller's own row, whoever the caller is.
+    await m.reissueOwnRecoveryCodes(operator, db, ['h7'], NOW);
+    assert.equal(live(), 3, "somebody else's sheet moved");
+  });
+
   it('EVERY function named in MUTATING_FUNCTIONS was exercised above', () => {
     // Enumerated on purpose: adding a mutation without adding it here — and
     // therefore without a coverage test — fails this assertion.
@@ -441,6 +505,8 @@ describe('every mutating path leaves an audit trail', () => {
       'updateSettings', 'changePhoneNumber',
       'createCategory', 'activateCategory', 'setPersonActive', 'addStaff', 'endStaff',
       'createProfile', 'renameProfile', 'setUnitOwner', 'updateOwnProfile',
+      'issueTemporaryPassword', 'changeOwnPassword', 'dropOwnPassword',
+      'reissueOwnRecoveryCodes',
     ]);
     for (const name of m.MUTATING_FUNCTIONS) {
       assert.ok(exercised.has(name), `${name} has no audit-coverage test`);

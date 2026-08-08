@@ -532,6 +532,34 @@ header .htext{flex:1;min-inline-size:0}
   </form>
   <p class="hint">بصمتك مبتخرجش من موبايلك خالص. الموقع بيحتفظ بمفتاح عام بس — زي قفل من غير مفتاح.</p>
 </div>
+
+<!-- The second and third doors, named on the screen rather than left as URLs
+     only the board knows. A resident whose phone cannot hold a passkey — and
+     they exist, which is why passwords exist at all — used to arrive here with
+     nothing to do. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🔑 أو ادخل بكلمة السر</h3>
+  <form method="post" action="/login/password">
+    <div class="field">
+      <label for="pw-phone">رقم الموبايل</label>
+      <input id="pw-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel"
+             placeholder="01xxxxxxxxx" required>
+    </div>
+    <div class="field">
+      <label for="pw">كلمة السر</label>
+      <input id="pw" name="password" type="password" autocomplete="current-password"
+             required aria-describedby="pw-hint">
+      <p class="hint" id="pw-hint">الإدارة بتبعتلك كلمة سر مؤقتة، وتقدر تغيّرها بعد ما تدخل.</p>
+    </div>
+    <button class="btn btn-2" type="submit">ادخل بكلمة السر</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🆘 معاك كود استرجاع؟</h3>
+  <p class="muted">لو موبايلك ضاع أو البصمة مش شغّالة ومعندكش كلمة سر، ادخل بأي كود من الأكواد اللي اداهالك الموقع أول ما فعّلت.</p>
+  <a class="btn btn-2" href="/login/recover">ادخل بكود استرجاع</a>
+</div>
 <div class="card">
   <p class="muted" style="margin-block-start:0">أول مرة تدخل؟ كلّم الإدارة يبعتولك لينك التفعيل.</p>
   <a class="btn btn-2" href="/help">💬 كلّم عضو مجلس الإدارة</a>

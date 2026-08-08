@@ -362,3 +362,80 @@ export async function recordAttempt(
     `INSERT INTO auth_attempts (id, scope, key, ok, created_at) VALUES (?,?,?,?,?)`
   ).bind(newId('ATT'), scope, key, ok ? 1 : 0, now()).run();
 }
+
+/* ===================================================================== */
+/* Passwords — the SECOND way in (0026)                                  */
+/* ===================================================================== */
+
+export interface StoredPassword {
+  profile_id: string;
+  salt: string;
+  hash: string;
+  iterations: number;
+  is_temporary: number;
+}
+
+/**
+ * The stored hash for a phone number, for the login screen.
+ *
+ * Takes the NUMBER rather than a profile id because that is what the person
+ * types, and resolving it here keeps the route from doing a lookup whose
+ * failure it would have to distinguish from a wrong password — a distinction
+ * that, surfaced to the caller, tells an attacker which numbers are registered.
+ */
+export async function passwordForPhone(
+  db: Db, phoneE164: string,
+): Promise<StoredPassword | null> {
+  const r = await db.prepare(
+    `SELECT w.profile_id, w.salt, w.hash, w.iterations, w.is_temporary
+       FROM passwords w
+       JOIN phone_identifiers pi ON pi.profile_id = w.profile_id
+       JOIN profiles p ON p.id = w.profile_id
+      WHERE pi.phone_e164 = ? AND pi.status = 'active' AND p.is_active = 1`
+  ).bind(phoneE164).first<StoredPassword>();
+  return r ?? null;
+}
+
+export async function passwordFor(
+  db: Db, profileId: string,
+): Promise<StoredPassword | null> {
+  const r = await db.prepare(
+    `SELECT profile_id, salt, hash, iterations, is_temporary FROM passwords WHERE profile_id = ?`
+  ).bind(profileId).first<StoredPassword>();
+  return r ?? null;
+}
+
+/**
+ * Write a password, replacing whatever was there.
+ *
+ * One statement for both cases — the board issuing a temporary one and the
+ * owner replacing it — because they differ only in `is_temporary` and in who
+ * is allowed to call them. The permission checks live in `mutations.ts`; this
+ * is the write.
+ */
+export async function putPassword(
+  db: Db, profileId: string,
+  h: { salt: string; hash: string; iterations: number },
+  isTemporary: boolean, setBy: string, now: Clock,
+): Promise<void> {
+  await db.prepare(
+    `INSERT INTO passwords (profile_id, salt, hash, iterations, is_temporary, set_by, set_at)
+     VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT(profile_id) DO UPDATE SET
+       salt = excluded.salt, hash = excluded.hash, iterations = excluded.iterations,
+       is_temporary = excluded.is_temporary, set_by = excluded.set_by,
+       set_at = excluded.set_at, last_used_at = NULL`
+  ).bind(profileId, h.salt, h.hash, h.iterations, isTemporary ? 1 : 0, setBy, now()).run();
+}
+
+export async function markPasswordUsed(
+  db: Db, profileId: string, now: Clock,
+): Promise<void> {
+  await db.prepare(`UPDATE passwords SET last_used_at = ? WHERE profile_id = ?`)
+    .bind(now(), profileId).run();
+}
+
+/** «امسح كلمة السر» — back to passkey-only, which is the design. */
+export async function dropPassword(db: Db, profileId: string): Promise<void> {
+  await db.prepare(`DELETE FROM passwords WHERE profile_id = ?`).bind(profileId).run();
+}

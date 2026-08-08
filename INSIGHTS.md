@@ -1304,3 +1304,23 @@ The sentence that solved it in one line was the board's own: *"في موبيلا
 Samsung Pass أو Google Pass بتشتغل، وفي موبيلات تانية لأ."* A user comparing two populations has
 already done the bisection; the job is to ask for that comparison early, not to theorise from one
 failing case.
+
+**[2026-08-08] [security] ⭐ A closed `CHECK (x IN (…))` refuses the whole request, not just the
+row.** `auth_attempts.scope` was written before passwords existed, so the rate limiter's
+`INSERT … 'password'` aborted, `asRefusal` turned it into a 409, and **every** password login
+returned that instead of a 401 — while the limiter counted nothing at all. The schema was doing
+exactly its job; what was missing was noticing that adding a new kind of credential means widening
+every enum that names credential kinds. **When you add a member to a domain, grep for the CHECK
+constraints that enumerate it** — SQLite cannot drop one, so this costs a table rebuild if it ships.
+
+**[2026-08-08] [agent] The coverage mechanism paid for itself the day a mutation was added.**
+`MUTATING_FUNCTIONS` + the "every function was exercised above" assertion failed the build the
+moment `reissueOwnRecoveryCodes` was written without a test — not a review comment, not a promise, a
+red build. That is the difference between a discipline and a mechanism (ADR-010), and it is worth
+the friction every time somebody adds the eleventh mutation at midnight.
+
+**[2026-08-08] [product] A credential you can only be given once is a credential most people lose.**
+Recovery codes were printed at activation and never again. Three populations therefore had none: the
+person who spent them, the person who lost the paper, and — after this session — the person the
+board gave a password to instead of a link. The «ادخل بكود» box on the login screen was addressed to
+somebody who could not exist. **A fallback needs a place it can be re-obtained, or it is decoration.**

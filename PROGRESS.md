@@ -10,10 +10,54 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~690 checks green** (107 unit · 437 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ⚠️ **The DEPLOYED Worker is several sessions behind this branch** (R-098) — judge the product from `preview/demo.html` or `npm run dev`, not from the live URL, until it is redeployed. |
-| **Last updated** | 2026-08-08 (session 29) |
+| **Status** | 🟢 **~713 checks green** (107 unit · 460 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ⚠️ **The DEPLOYED Worker is several sessions behind this branch** (R-098) — judge the product from `preview/demo.html` or `npm run dev`, not from the live URL, until it is redeployed. |
+| **Last updated** | 2026-08-08 (session 33) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 33 — a second and a third way in
+
+The owner's instruction, after the Samsung Pass finding: *«ضيف في صفحة الlogin خيار الpassword …
+الأدمن بيبعتله باسورد مبدأي عشوائي زي الtoken، والشخص يقدر يغيّره بعدين ويستخدمه لما البصمة تبقى مش
+شغّالة، وبرضه ضيف مكان للأكواد الاسترجاعية.»*
+
+`AGENTS.md` lists "Email or password auth" under **Never**, and that rule was written for a good
+reason. It is overridden here on the record, for a fact found in the field rather than a preference:
+a phone with no platform authenticator **cannot enrol a passkey at all**, so for its owner the portal
+was not harder — it was shut. Everything built is arranged to keep the password *second*:
+
+* **No password exists until an admin issues one.** `POST /admin/members/:id/password` generates it
+  (`ABCD-EFGH-JKLM`, an alphabet with no `0/O`, `1/I/L`, `5/S`, `2/Z`), shows it **once**, and stores
+  only a PBKDF2-SHA256 hash at 210,000 iterations — the cost in a **column**, so it can be raised
+  later without locking anyone out. The board never chooses it and can never be shown it again.
+* **Guessing is bounded** — five attempts per 15 minutes per IP *and* per number, and a wrong
+  password and an unknown number return byte-identical responses, so the screen cannot be used to
+  enumerate which numbers have accounts.
+* **`/me` replaces it.** A temporary password lands the person on `/me`, not the home page, because
+  that is the one moment they are certainly looking at a secret that travelled through WhatsApp.
+  Changing it requires the current one — a session is "this phone is unlocked", not "I chose this".
+  They can also delete it and go back to passkey-only.
+* **A password never outlives the account or the recovery.** Two triggers in `0026`: stopping an
+  account deletes it, and fulfilling a recovery deletes it — otherwise "we stopped his account" is
+  false in exactly the case somebody says it out loud, and a recovery hands the account back to
+  whoever has the phone.
+* **The third way in now has a home.** Recovery codes used to be printed at exactly one moment —
+  activation — and never again, so anyone who spent them, lost the paper, or was given a password
+  instead of a link had nothing, and the «ادخل بكود» box on the login screen was addressed to a
+  person who could not exist. `/me` now shows how many are left and prints a fresh sheet, retiring
+  the old one in the same batch.
+
+**The bug the tests found, which no amount of reading would have:** `auth_attempts.scope` is a closed
+`CHECK (scope IN (…))` written before passwords existed. Inserting `'password'` did not silently
+misbehave — it aborted the whole login request, so *every* password login returned the refusal and
+the rate limiter counted nothing. The schema refusing an unknown value is the control working;
+migration `0026` rebuilds the table with the value added.
+
+**The lesson:** a mechanism that forces a test per mutation earns its keep at the moment you add
+one. `MUTATING_FUNCTIONS` failed the build the instant `reissueOwnRecoveryCodes` was written without
+a coverage test — before it ever ran against a resident.
+
+---
 
 ### What changed in session 32 — ⭐ the phones that could not hold a passkey
 
@@ -1781,7 +1825,7 @@ equation is a tautology and is demoted).
 ("Learned during the build") → `RISKS.md` (R-028 onward).
 
 **One command tells you if it still works:** `npm run verify` →
-**~660 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
+**~713 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
 access/audit/auth/onboarding/transparency/views + 48 ledger invariants + 34 demo checks + 12
 restore-drill checks + **41 screens rendered** + an axe-core WCAG 2.2 AA pass over all of them.
 If it is green, the security and money layers are intact. **It has never run in CI — there is
@@ -1789,7 +1833,7 @@ none.** (`npm run a11y` needs `npm i -D playwright axe-core`; without them it SK
 fails, so a green verify with no axe line is not an accessibility pass.)
 
 **What exists and runs:**
-`migrations/0001`–`0019` (**49 tables / 22 views / 42 triggers**, every table `STRICT`) ·
+`migrations/0001`–`0026` (every table `STRICT`) ·
 `types/domain.ts` · `lib/money.ts` (integer piastres, branded) · `lib/phone.ts` ·
 `lib/rbac.ts` (the permission matrix as data) · `lib/db/` (**the ONLY place SQL exists**, enforced by
 `tools/lint-no-sql.mjs`) · `lib/auth/passkey.ts` + `lib/auth/channel.ts` ·
@@ -1797,9 +1841,17 @@ fails, so a green verify with no axe line is not an accessibility pass.)
 `src/views/` (hand-authored RTL CSS, ADR-019) · `messages/ar.json` · `seed/prod/` ·
 `seed/demo/` (204 units, **invented**) · `tests/` · `preview/`.
 
+**There are three ways into an account, in this order:** a **passkey** (the design — one touch,
+nothing to remember, nothing to phish); a **password** the board issues and the owner replaces
+(`0026`, added because a phone with no Samsung Pass / Google Password Manager cannot enrol a passkey
+at all — see session 33); and a **printed recovery code** (six single-use codes, reprintable from
+`/me`). The password is deliberately second: it does not exist until an admin issues one, it is rate
+limited to five guesses per 15 minutes, and it is destroyed by a deactivation or a recovery.
+
 **A resident can, today:** log in with a passkey → see their balance → walk a five-step payment
 wizard that survives switching to the bank app → upload a receipt → have it reviewed by someone who
-is not themselves → open `/me` and see which devices can open their account, and revoke one.
+is not themselves → open `/me` and see which devices can open their account, revoke one, change or delete their
+password, and print a fresh sheet of recovery codes.
 **An admin can:** review and POST payments, record expenses (countersigned by a second person),
 open and publish a subscription year, close a period, publish news, run the village map, read the
 journal entry by entry at `/admin/ledger`, **import the owner register from a screen**

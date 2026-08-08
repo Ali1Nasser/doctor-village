@@ -638,6 +638,30 @@ header .htext{flex:1;min-inline-size:0}
      person has, which is what you want when the phone is in somebody else's
      hand. Until now only the second existed, so "log out of my son's tablet"
      meant logging out of your own phone too. -->
+<!-- The second way in. Passkeys are the design and this is the fallback for a
+     phone that cannot hold one — so the card says which state the account is
+     in, and a still-temporary password is called out in warning colours: it
+     travelled through WhatsApp, and whoever sent it read it. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🔑 كلمة السر</h3>
+  <p class="muted">مفيش كلمة سر على حسابك. لو محتاج واحدة (مثلاً البصمة مش شغّالة على موبايلك) اطلبها من الإدارة.</p>
+</div>
+
+<!-- The third way in, and the only one that survives losing the phone entirely.
+     Codes used to be printed once, at activation, and never again: somebody who
+     spent them, or lost the paper, or was given a password instead of an
+     activation link had nothing — and the «ادخل بكود» box on the login screen
+     was addressed to a person who could not exist. This is that place. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🖨️ أكواد الاسترجاع</h3>
+  <p class="hint">ورقة فيها ٦ أكواد، كل واحد بيتستخدم مرة واحدة بس. دي طريقة دخولك لو الموبايل ضاع أو البصمة وكلمة السر مابقوش شغّالين. اطبعها أو اكتبها وحطّها في مكان أمان — مش على نفس الموبايل.</p>
+  <p class="muted">مفيش أكواد على حسابك دلوقتي.</p>
+  <form method="post" action="/me/recovery-codes" style="margin-block-start:14px">
+    <p class="hint">المجموعة الجديدة بتلغي القديمة كلها. أي ورقة قديمة تبقى مالهاش لازمة.</p>
+    <button class="btn" type="submit">اعمل مجموعة جديدة</button>
+  </form>
+</div>
+
 <div class="card">
   <h3 style="margin-block-start:0">↪ تسجيل الخروج</h3>
   <form method="post" action="/logout">

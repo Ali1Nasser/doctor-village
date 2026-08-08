@@ -107,6 +107,36 @@ export async function resolveAuthContext(
   };
 }
 
+/**
+ * The caller's OWN login number, for the password-strength check.
+ *
+ * Reading it needs no capability because it is theirs, and it never leaves the
+ * server: the only caller compares a proposed password against it so that
+ * «01011111111» cannot become somebody's password. Rendering it would be a
+ * different decision — `/me` deliberately shows only the last three digits.
+ */
+export async function getOwnPhone(ctx: AuthContext, db: Db): Promise<string | null> {
+  const r = await db.prepare(
+    `SELECT phone_e164 FROM phone_identifiers
+      WHERE profile_id = ? AND status = 'active' LIMIT 1`
+  ).bind(ctx.personId).first<{ phone_e164: string }>();
+  return r?.phone_e164 ?? null;
+}
+
+/**
+ * How many printed recovery codes the caller still has.
+ *
+ * A count, never the codes — those exist only as hashes, and the number is the
+ * only honest thing `/me` can say about them. Scoped to `ctx.personId` in the
+ * query string, so there is no argument that could ask about somebody else.
+ */
+export async function countOwnRecoveryCodes(ctx: AuthContext, db: Db): Promise<number> {
+  const r = await db.prepare(
+    `SELECT COUNT(*) n FROM recovery_codes WHERE profile_id = ? AND used_at IS NULL`
+  ).bind(ctx.personId).first<{ n: number }>();
+  return Number(r?.n ?? 0);
+}
+
 /** Placeholder for the real hash. Swapped for SHA-256 in lib/auth/session.ts;
  *  kept here so `lib/db/` never imports crypto policy. */
 let _hash: (t: string) => string | Promise<string> = (t: string) => t;

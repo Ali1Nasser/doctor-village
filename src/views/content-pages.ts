@@ -624,6 +624,8 @@ export function membersPage(d: {
     passkeys: number; last_login_at: string | null; link_pending: number;
   }>;
   issued?: { name: string; url: string; expiresAt: string };
+  /** A temporary password, shown once for the same reason the link is. */
+  issuedPassword?: { name: string; password: string };
   error?: string;
   /** The name filter currently applied, echoed back into the box. */
   q?: string;
@@ -660,6 +662,12 @@ export function membersPage(d: {
              <button class="btn btn-2 btn-sm" type="submit">🔗 ${
                esc(m.link_pending > 0 ? t.members.reissue : t.members.issue)}</button>
            </form>`}
+      <!-- Offered for EVERYBODY, not only those without a passkey: the case it
+           exists for is «بصمته كانت شغّالة وبقت مش شغّالة», which is a person
+           who already has one. -->
+      <form method="post" action="/admin/members/${esc(m.id)}/password" class="inline-form">
+        <button class="btn btn-2 btn-sm" type="submit">${esc(t.members.issuePassword)}</button>
+      </form>
     </span>
   </div>`;
 
@@ -682,6 +690,17 @@ export function membersPage(d: {
     ${d.q ? `<a class="btn btn-2" href="/admin/members">${esc(t.members.findClear)}</a>` : ''}
   </form>
 </div>
+
+${d.issuedPassword ? `
+<div class="card" style="border-inline-start:5px solid var(--accent)">
+  <h3 style="margin-block-start:0">🔑 ${esc(msg(t.members.passwordReady, {
+    name: d.issuedPassword.name }))}</h3>
+  <div class="banner warn">${esc(t.members.passwordOnce)}</div>
+  <p style="word-break:break-all;background:var(--surface-2);padding:12px;border-radius:10px;
+            font-size:1.15rem;letter-spacing:.08em;direction:ltr;text-align:center">${
+    num(d.issuedPassword.password)}</p>
+  <p class="hint">${esc(t.members.passwordWhy)}</p>
+</div>` : ''}
 
 ${d.issued ? `
 <div class="card" style="border-inline-start:5px solid var(--ok)">

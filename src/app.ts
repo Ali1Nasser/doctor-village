@@ -21,6 +21,7 @@ import { NotFound } from '../lib/db/index.js';
 import type { AuthContext } from '../types/domain.js';
 import * as v from './views/pages.js';
 import * as passkey from '../lib/auth/passkey.js';
+import * as pw from '../lib/auth/password.js';
 import { getChannel } from '../lib/auth/channel.js';
 import * as adb from '../lib/db/auth.js';
 import * as drafts from '../lib/db/drafts.js';
@@ -422,6 +423,56 @@ export function createApp(deps: AppDeps) {
 
   app.get('/login', c => html(v.loginPage(undefined,
     c.req.query('bye') ? _t.login.signedOut : undefined)));
+
+  /**
+   * Password login — the second door, and rate limited like one.
+   *
+   * Six passkey attempts in fifteen minutes is the existing rule, and it is
+   * generous because a passkey cannot be guessed. A password can, from anywhere
+   * on earth, so this gets FIVE per number and five per IP in fifteen minutes.
+   * The number is rate limited as well as the address because an attacker with
+   * a botnet has many addresses and only one target.
+   *
+   * The refusal never distinguishes "no such number" from "wrong password":
+   * that difference, returned to a caller, is a way to enumerate which of the
+   * village's phone numbers hold accounts.
+   */
+  app.post('/login/password', async c => {
+    const f = await c.req.parseBody();
+    const phone = normalize(String(f['phone'] ?? ''));
+    const supplied = String(f['password'] ?? '');
+    const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
+    const since = new Date(Date.parse(deps.now()) - 15 * 60_000).toISOString()
+      .replace(/\.\d+Z$/, 'Z');
+
+    if (!phone.ok) return html(v.loginPage(PHONE_MESSAGES_AR[phone.error]), 400);
+
+    for (const key of [ip, phone.value]) {
+      if (await adb.countRecentAttempts(deps.db, 'password', key, since) >= 5) {
+        return html(v.loginPage(_t.login.tooManyTries), 429);
+      }
+    }
+
+    const stored = await adb.passwordForPhone(deps.db, phone.value);
+    const ok = stored ? await pw.verifyPassword(supplied, stored) : false;
+    await adb.recordAttempt(deps.db, 'password', ip, ok, deps.now);
+    await adb.recordAttempt(deps.db, 'password', phone.value, ok, deps.now);
+    if (!stored || !ok) return html(v.loginPage(_t.login.passwordWrong), 401);
+
+    await adb.markPasswordUsed(deps.db, stored.profile_id, deps.now);
+    const cookie = await openSessionCookie(stored.profile_id, ip,
+      c.req.header('user-agent') ?? null);
+    // Straight to /me when the password is still the board's: the person is one
+    // tap from replacing a secret that travelled through WhatsApp, and this is
+    // the only moment they are certainly looking.
+    // `c.redirect` takes no headers, and the session cookie has to ride ON the
+    // redirect or the browser arrives logged out — the same trap the note on
+    // `html()` describes.
+    return new Response(null, {
+      status: 303,
+      headers: { location: stored.is_temporary ? '/me' : '/', 'set-cookie': cookie },
+    });
+  });
 
   /* ---- passkey ceremonies -------------------------------------------- */
 
@@ -1775,10 +1826,12 @@ export function createApp(deps: AppDeps) {
     q: string,
     issued?: { name: string; url: string; expiresAt: string },
     error?: string,
+    issuedPassword?: { name: string; password: string },
   ) => cv.membersPage({
     members: await onboard.listMembers(ctx, deps.db, q),
     q,
     issued,
+    issuedPassword,
     error,
   });
 
@@ -1805,6 +1858,29 @@ export function createApp(deps: AppDeps) {
       }));
     } catch (e) {
       if (e instanceof Forbidden) return html(await membersScreen(ctx, '', undefined, e.reasonAr), 403);
+      throw e;
+    }
+  });
+
+  /**
+   * A temporary password, for a phone that cannot hold a passkey.
+   *
+   * Sits beside the activation link because it is the same act — the board
+   * handing somebody the means to get in — and the same discipline: generated
+   * here, shown once, only a hash stored.
+   */
+  app.post('/admin/members/:id/password', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'user.create')) throw new Forbidden('user.create');
+    try {
+      const { password, fullName } = await mutations.issueTemporaryPassword(
+        ctx, deps.db, c.req.param('id') as never,
+        pw.hashPassword, pw.generatePassword, deps.now);
+      return html(await membersScreen(ctx, '', undefined, undefined,
+        { name: fullName, password }));
+    } catch (e) {
+      if (e instanceof Forbidden) return html(await membersScreen(ctx, '', undefined, e.reasonAr), 403);
+      if (e instanceof LedgerRefused) return html(await membersScreen(ctx, '', undefined, e.reasonAr), 409);
       throw e;
     }
   });
@@ -2244,12 +2320,19 @@ export function createApp(deps: AppDeps) {
    * the caller's own identity, so it needs no capability beyond being logged
    * in; `myAccount` still takes `ctx` and scopes every query to `personId`.
    */
-  const meScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
-    av.mePage({
+  const meScreen = async (
+    ctx: AuthContext, flash?: string, error?: string, freshCodes?: string[],
+  ) => {
+    const stored = await adb.passwordFor(deps.db, ctx.personId);
+    return av.mePage({
       me: await adm.myAccount(ctx, deps.db),
       roleAr: ROLE_AR[ctx.role] ?? ctx.role,
+      password: stored ? { isTemporary: !!stored.is_temporary } : null,
+      codesLeft: await data.countOwnRecoveryCodes(ctx, deps.db),
+      freshCodes,
       flash, error,
     });
+  };
 
   app.get('/me', async c => html(await meScreen(need(c))));
 
@@ -2297,6 +2380,53 @@ export function createApp(deps: AppDeps) {
    * failure. `revokeCredential` is scoped to `profile_id = ctx.personId`, so
    * this cannot reach another person's device even with a guessed id.
    */
+  app.post('/me/password', async c => {
+    const ctx = need(c);
+    const f = await c.req.parseBody();
+    const next = String(f['next'] ?? '');
+    const phone = await data.getOwnPhone(ctx, deps.db);
+    const weak = pw.checkPasswordStrength(next, phone);
+    if (weak) {
+      const why = { tooShort: _t.me.errTooShort, sameAsPhone: _t.me.errSameAsPhone,
+                    tooSimple: _t.me.errTooSimple }[weak];
+      return html(await meScreen(ctx, undefined, why), 400);
+    }
+    try {
+      await mutations.changeOwnPassword(ctx, deps.db, String(f['current'] ?? ''), next,
+        pw.verifyPassword, pw.hashPassword, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await meScreen(ctx, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return html(await meScreen(ctx, _t.me.passwordChanged));
+  });
+
+  app.post('/me/password/drop', async c => {
+    const ctx = need(c);
+    await mutations.dropOwnPassword(ctx, deps.db);
+    return html(await meScreen(ctx, _t.me.passwordDropped));
+  });
+
+  /**
+   * A fresh sheet of printed recovery codes.
+   *
+   * The plaintext exists in this handler and nowhere else: it is generated
+   * here, hashed here, and handed to exactly one render. Nothing stores it, so
+   * «ابعتهالي تاني» has no implementation — the answer is another sheet, which
+   * retires this one.
+   *
+   * `noindex` is not enough on its own and this page is behind a session
+   * anyway; what matters is that a reload of `/me` cannot reproduce the list,
+   * which is why `freshCodes` is a parameter rather than a lookup.
+   */
+  app.post('/me/recovery-codes', async c => {
+    const ctx = need(c);
+    const codes = Array.from({ length: 6 }, () => passkey.humanCode());
+    await mutations.reissueOwnRecoveryCodes(ctx, deps.db,
+      await Promise.all(codes.map(x => passkey.sha256(x))), deps.now);
+    return html(await meScreen(ctx, undefined, undefined, codes));
+  });
+
   app.post('/me/devices/:id/revoke', async c => {
     const ctx = need(c);
     try {
