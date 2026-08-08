@@ -1226,3 +1226,10 @@ Adding two columns to `profiles` broke `verify_ledger.py` in three places, each 
 `INSERT INTO profiles VALUES (?,?,?,?,?,?,?,?,?)` with the count typed by hand. None of them had
 anything to do with what the file tests, and a fixture that fails for an unrelated reason is one
 people learn to edit past rather than read. Count the placeholders from the row.
+
+**[2026-08-08] [ops] Deleting the credential file in the same command that uses it hides the failure.**
+The live cleanup was written as `wrangler … | grep '"changes"'` followed by `rm cf.env`. The wrangler
+call failed, `grep` swallowed the error, `rm` ran anyway, and the shell reported success — the probe
+rows were still live and I only noticed because I queried the database afterwards instead of
+trusting the exit. **Verify the state, not the command**, and never pipe the only evidence of a
+failure into a filter that drops it.
