@@ -78,6 +78,23 @@ const form = (path: string, body: Record<string, string>, tok?: string) =>
     body: new URLSearchParams(body),
   });
 
+/**
+ * The resident's session token, which is deliberately NOT a constant.
+ *
+ * `redeemRecoveryCode` revokes every session of the account it recovers —
+ * correctly, because recovery means "somebody else has my phone". Any test
+ * after one that redeems a code therefore needs a new session, and a fixture
+ * that pretends otherwise passes for the wrong reason: the request 401s and the
+ * assertion about scoping never happens.
+ */
+let resTok = 'tok-res';
+let sesN = 10;
+const reopenRes = () => {
+  resTok = `tok-res-${++sesN}`;
+  raw.prepare(`INSERT INTO sessions (id, profile_id, token_hash, expires_at) VALUES (?,?,?,?)`)
+     .run(pid('SES', sesN), RES, sha(resTok), '2027-01-01T00:00:00Z');
+};
+
 const stored = (id: string) => raw.prepare(
   `SELECT is_temporary, hash, set_by FROM passwords WHERE profile_id = ?`).get(id) as
   { is_temporary: number; hash: string; set_by: string } | undefined;
@@ -117,7 +134,7 @@ test('an admin issues one, and the product cannot show it again', async () => {
 
 test('neither a resident nor an operator can issue one', async () => {
   const before = stored(OTHER);
-  const r = await form(`/admin/members/${OTHER}/password`, {}, 'tok-res');
+  const r = await form(`/admin/members/${OTHER}/password`, {}, resTok);
   assert.equal(r.status, 403);
   assert.deepEqual(stored(OTHER), before, 'a resident minted a credential for somebody else');
 });
@@ -171,12 +188,12 @@ test('the owner sets their own, and the current one is required to do it', async
   const password = await issueFor(RES);
 
   const wrong = await form('/me/password',
-    { current: 'NOPE-NOPE-NOPE', next: 'قرية الأطباء 2026' }, 'tok-res');
+    { current: 'NOPE-NOPE-NOPE', next: 'قرية الأطباء 2026' }, resTok);
   assert.equal(wrong.status, 409);
   assert.equal(stored(RES)!.is_temporary, 1, 'the password changed without the current one');
 
   const ok = await form('/me/password',
-    { current: password, next: 'قرية الأطباء 2026' }, 'tok-res');
+    { current: password, next: 'قرية الأطباء 2026' }, resTok);
   assert.equal(ok.status, 200);
   assert.equal(stored(RES)!.is_temporary, 0,
     'the owner replaced it, but it is still flagged as the one the board issued');
@@ -197,14 +214,14 @@ test('a weak password is refused with the reason', async () => {
     ['aaaaaaaa', /سهلة/],
   ] as const) {
     const r = await form('/me/password',
-      { current: 'قرية الأطباء 2026', next }, 'tok-res');
+      { current: 'قرية الأطباء 2026', next }, resTok);
     assert.equal(r.status, 400, `"${next}" was accepted`);
     assert.match(await r.text(), needle);
   }
 });
 
 test('the owner can remove the password and go back to passkey-only', async () => {
-  const r = await form('/me/password/drop', {}, 'tok-res');
+  const r = await form('/me/password/drop', {}, resTok);
   assert.equal(r.status, 200);
   assert.equal(stored(RES), undefined);
   clock = '2026-08-08T20:00:00Z';
@@ -259,7 +276,7 @@ const liveCodes = (id: string) => (raw.prepare(
 test('the owner can print a fresh sheet, and it retires the old one', async () => {
   assert.equal(liveCodes(RES), 0, 'setup: this account never activated');
 
-  const html = await (await form('/me/recovery-codes', {}, 'tok-res')).text();
+  const html = await (await form('/me/recovery-codes', {}, resTok)).text();
   const first = [...html.replace(/<[^>]+>/g, ' ').matchAll(/\b[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g)]
     .map(m => m[0]);
   assert.equal(first.length, 6, `expected six printed codes, got ${first.length}`);
@@ -268,7 +285,7 @@ test('the owner can print a fresh sheet, and it retires the old one', async () =
   // Asking again replaces the sheet — it does not add a second one. Six on the
   // fridge plus six in last year's WhatsApp is twelve passkey bypasses nobody
   // is counting.
-  const second = await (await form('/me/recovery-codes', {}, 'tok-res')).text();
+  const second = await (await form('/me/recovery-codes', {}, resTok)).text();
   assert.equal(liveCodes(RES), 6, 'the old sheet stayed live alongside the new one');
   for (const code of first) {
     assert.ok(!second.includes(code), 'a retired code was printed again');
@@ -276,10 +293,10 @@ test('the owner can print a fresh sheet, and it retires the old one', async () =
 });
 
 test('reopening /me does not show the codes again', async () => {
-  const printed = [...(await (await form('/me/recovery-codes', {}, 'tok-res')).text())
+  const printed = [...(await (await form('/me/recovery-codes', {}, resTok)).text())
     .replace(/<[^>]+>/g, ' ').matchAll(/\b[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g)].map(m => m[0]);
   const again = await (await app.request('https://x.test/me',
-    { headers: { cookie: 'qa_session=tok-res' } })).text();
+    { headers: { cookie: `qa_session=${resTok}` } })).text();
   for (const code of printed) {
     assert.ok(!again.includes(code), 'the page can reproduce a code, so it stored one');
   }
@@ -288,8 +305,8 @@ test('reopening /me does not show the codes again', async () => {
     /الأكواد اللي لسه معاك 6/, '/me does not report how many are left');
 });
 
-test('a fresh code actually opens the account', async () => {
-  const printed = [...(await (await form('/me/recovery-codes', {}, 'tok-res')).text())
+test('a fresh code opens the account — and ends every session it had', async () => {
+  const printed = [...(await (await form('/me/recovery-codes', {}, resTok)).text())
     .replace(/<[^>]+>/g, ' ').matchAll(/\b[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g)].map(m => m[0]);
   clock = '2026-08-09T09:00:00Z';                     // a clean rate-limit window
   const r = await app.request('https://x.test/api/auth/recover', {
@@ -299,6 +316,13 @@ test('a fresh code actually opens the account', async () => {
   });
   assert.equal(r.status, 200);
   assert.equal(liveCodes(RES), 5, 'a redeemed code stayed usable');
+
+  // Recovery means "somebody else has my phone", so every session the account
+  // held must die with it — including the one this test suite was using.
+  assert.equal((await app.request('https://x.test/me',
+    { headers: { cookie: `qa_session=${resTok}` } })).status, 401,
+    'the phone that was lost kept a live session through a recovery');
+
   // Single use: the same code a second time is refused.
   clock = '2026-08-09T10:00:00Z';
   const twice = await app.request('https://x.test/api/auth/recover', {
@@ -307,13 +331,55 @@ test('a fresh code actually opens the account', async () => {
     body: JSON.stringify({ code: printed[0] }),
   });
   assert.notEqual(twice.status, 200, 'a printed code worked twice');
+  reopenRes();
 });
 
 test('nobody can print somebody else’s codes', async () => {
   const before = liveCodes(OTHER);
-  await form('/me/recovery-codes', { profile_id: OTHER }, 'tok-res');
+  const r = await form('/me/recovery-codes', { profile_id: OTHER }, resTok);
+  // The request must SUCCEED — for the caller's own account. A 401 here would
+  // make the assertion below true for the wrong reason.
+  assert.equal(r.status, 200);
   assert.equal(liveCodes(OTHER), before,
     'a form field named another account and the route believed it');
+});
+
+test('the recovery-code form works with no JavaScript at all', async () => {
+  const printed = [...(await (await form('/me/recovery-codes', {}, resTok)).text())
+    .replace(/<[^>]+>/g, ' ').matchAll(/\b[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g)].map(m => m[0]);
+  clock = '2026-08-10T09:00:00Z';                    // a clean rate-limit window
+
+  // The page has always POSTed here; until now nothing answered, so anybody
+  // whose script did not run got a 404 — on the screen that is their last way
+  // in before a two-admin recovery.
+  const r = await form('/login/recover', { code: printed[1]! });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get('location'), '/activate');
+  const token = /qa_session=([^;]+)/.exec(r.headers.get('set-cookie') ?? '')?.[1];
+  assert.ok(token, 'no session cookie rode the redirect');
+  const me = await app.request('https://x.test/api/me',
+    { headers: { cookie: `qa_session=${token}` } });
+  assert.equal(((await me.json()) as { id: string }).id, RES);
+
+  // A wrong code re-renders the page with the reason, and never says whether
+  // the code was unknown or merely spent.
+  clock = '2026-08-10T10:00:00Z';
+  const bad = await form('/login/recover', { code: 'ZZZZ-ZZZZ-ZZZZ' });
+  assert.equal(bad.status, 401);
+  assert.match(await bad.text(), /مش صحيح أو اتستخدم/);
+});
+
+test('the recovery page is written for somebody typing a code, not holding one', async () => {
+  const text = (await (await app.request('https://x.test/login/recover')).text())
+    .replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<[^>]+>/g, ' ');
+  assert.match(text, /الدخول بكود استرجاع/);
+  // The old page borrowed its heading from an error about fingerprints and its
+  // labels from the screen that hands the codes out, so it read as though
+  // something had already gone wrong.
+  assert.ok(!text.includes('موبايلك مش بيدعم البصمة'),
+    'the heading is still an error message about a different problem');
+  assert.ok(!text.includes('متبعتهمش لحد'),
+    'still telling somebody entering a code not to send their codes to anyone');
 });
 
 test('the login screen offers all three ways in', async () => {

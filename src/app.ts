@@ -588,6 +588,43 @@ export function createApp(deps: AppDeps) {
 
   app.get('/login/recover', () => html(v.recoverPage()));
 
+  /**
+   * The same redemption as `POST /api/auth/recover`, as a plain form.
+   *
+   * The page always posted here and nothing answered — a 404 for anybody whose
+   * JavaScript did not run. That is not a hypothetical audience on this
+   * project: the people who reach this screen are the ones whose phone already
+   * failed them, often on an in-app browser, and this is their LAST way in
+   * before a two-admin assisted recovery. It must work without a script.
+   *
+   * Same rate limit and same wording as the JSON path, because they are the
+   * same act.
+   */
+  app.post('/login/recover', async c => {
+    const f = await c.req.parseBody();
+    const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
+    const since = new Date(Date.parse(deps.now()) - 15 * 60_000).toISOString()
+      .replace(/\.\d+Z$/, 'Z');
+    if (await adb.countRecentAttempts(deps.db, 'recover', ip, since) >= 3) {
+      return html(v.recoverPage(_t.login.recoverTooMany), 429);
+    }
+    await adb.recordAttempt(deps.db, 'recover', ip, false, deps.now);
+
+    const norm = String(f['code'] ?? '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    const used = await adb.redeemRecoveryCode(deps.db, await passkey.sha256(norm), deps.now);
+    if (!used) return html(v.recoverPage(_t.login.recoverWrong), 401);
+
+    const cookie = await openSessionCookie(used.profileId, ip,
+      c.req.header('user-agent') ?? null);
+    // Straight into enrolment, as the JSON path does: a recovered account with
+    // no passkey is an account the resident still cannot open tomorrow. The
+    // activate screen detects a phone that cannot hold one and offers the other
+    // doors instead of a button that cannot work.
+    return new Response(null, {
+      status: 303, headers: { location: '/activate', 'set-cookie': cookie },
+    });
+  });
+
   app.post('/api/auth/recover', async c => {
     const { code } = await c.req.json<{ code: string }>();
     const ip = c.req.header('cf-connecting-ip') ?? 'unknown';

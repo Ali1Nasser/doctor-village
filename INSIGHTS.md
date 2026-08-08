@@ -1324,3 +1324,11 @@ Recovery codes were printed at activation and never again. Three populations the
 person who spent them, the person who lost the paper, and — after this session — the person the
 board gave a password to instead of a link. The «ادخل بكود» box on the login screen was addressed to
 somebody who could not exist. **A fallback needs a place it can be re-obtained, or it is decoration.**
+
+**[2026-08-08] [testing] ⭐ A fixture that keeps using a session a previous test revoked passes for
+the wrong reason.** `redeemRecoveryCode` revokes every session of the account it recovers —
+correctly. So the two tests after the one that redeemed a code were being answered `401` before they
+reached the thing they claimed to assert, and "a resident cannot print somebody else's codes" was
+green because the request never ran at all. The tell was a third test failing with a code that was
+provably valid. **When an assertion about scoping passes, check that the request it makes SUCCEEDS
+for the allowed case** — a 401 satisfies "nothing changed" just as well as a working guard does.

@@ -697,25 +697,35 @@ export function messagePage(title: string, bodyAr: string): string {
  * phone. It has to be findable from the login screen and calm to read: somebody
  * arrives here already worried they have lost access to their money records.
  */
-export function recoverPage(): string {
-  return page({ title: t.activate.title, showNav: false,
+export function recoverPage(error?: string): string {
+  // Every string on this page used to be borrowed from the page that HANDS OUT
+  // the codes, so somebody typing one was told «دول أكواد الاسترجاع بتاعتك»
+  // twice and «متبعتهمش لحد» — advice for a person holding a sheet, not
+  // entering a code — under a heading that was an error message about
+  // fingerprints. It read like something had gone wrong before they typed
+  // anything. The copy here is written for the person actually standing here:
+  // they have lost their phone and want back into their money records.
+  return page({ title: t.login.recoverTitle, showNav: false,
                 scripts: [RECOVER_JS], jsMessages: LOGIN_MSGS }, `
 <div class="card">
-  <h2 style="margin-block-start:0">${esc(t.login.errors.noPasskey)}</h2>
-  <p class="muted">${esc(t.activate.recoveryCodes)}</p>
+  <h2 style="margin-block-start:0">🆘 ${esc(t.login.recoverTitle)}</h2>
+  <p class="muted">${esc(t.login.recoverIntro)}</p>
+  ${error ? `<div class="banner warn">${esc(error)}</div>` : ''}
   <form id="recover-form" method="post" action="/login/recover">
     <div class="field">
-      <label for="code">${esc(t.activate.recoveryCodes)}</label>
+      <label for="code">${esc(t.login.recoverCodeLabel)}</label>
       <input id="code" name="code" inputmode="text" autocomplete="one-time-code"
-             placeholder="XXXX-XXXX-XXXX" required
+             placeholder="XXXX-XXXX-XXXX" required aria-describedby="code-hint"
              style="text-transform:uppercase;letter-spacing:.08em">
-      <p class="hint">${esc(t.activate.recoveryWarning)}</p>
+      <p class="hint" id="code-hint">${esc(t.login.recoverCodeHint)}</p>
     </div>
-    <button class="btn" type="submit">${esc(t.app.confirm)}</button>
+    <button class="btn" type="submit">${esc(t.login.recoverSubmit)}</button>
   </form>
+  <a class="btn btn-2" href="/login">← ${esc(t.login.title)}</a>
 </div>
 <div class="card">
-  <p class="muted" style="margin-block-start:0">${esc(t.login.firstTime)}</p>
+  <h3 style="margin-block-start:0">🤔 ${esc(t.login.firstTime)}</h3>
+  <p class="muted">${esc(t.login.recoverNoCodes)}</p>
   <a class="btn btn-2" href="/help">💬 ${esc(t.login.helpBoard)}</a>
 </div>`);
 }
