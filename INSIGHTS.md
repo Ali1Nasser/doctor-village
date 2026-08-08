@@ -1253,3 +1253,23 @@ click open, but not when I send it on WhatsApp" is not a vague report — it is 
 because the only difference between those two paths is who else fetched the URL in between. When a
 user distinguishes two routes to the same feature, believe the distinction and look at what is
 different about the transport, not at the feature.
+
+**[2026-08-08] [ops] An HttpOnly cookie cannot report its own absence.** Activation kept failing on
+the board's phone with «لازم تسجّل دخول الأول» — accurate (the enrol call got a 401) and useless to
+somebody who had activated their account one second earlier. Server side everything was correct:
+nineteen sessions created for that profile, none revoked, a well-formed single `Set-Cookie`, and the
+whole flow completing in a real Chromium against the same code. The only remaining explanation was
+the browser dropping the cookie, which an in-app WebView does — and the page could not tell, because
+the session cookie is HttpOnly by design. **A second, readable, worthless cookie set beside it turns
+"you are not logged in" into "this browser is not keeping cookies, open the link in Chrome".**
+
+**[2026-08-08] [agent] An object literal cannot set two cookies.** `{ 'set-cookie': a, 'set-cookie': b }`
+is not expressible, and joining them into one string ships a header browsers discard. `Headers.append`
+is the only way; `html()` now takes `string | string[]` per field. Worth knowing before you need it,
+because the failure is silent — one cookie simply never arrives.
+
+**[2026-08-08] [agent] "It predates the fix" is a hypothesis, not an answer.** I told the board their
+screenshot was from before the deploy. Their next screenshot had the new card in it AND the same
+error, which falsified that in one image. The cost was a round trip; the lesson is to check a claim
+about WHICH VERSION produced a screenshot against something version-specific in the screenshot
+itself, which was available both times.

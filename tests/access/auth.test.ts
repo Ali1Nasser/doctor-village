@@ -239,6 +239,38 @@ describe('challenges and activation links are single-use', () => {
     assert.match(enrolled, /المرة الجاية/);
   });
 
+  /**
+   * Activation sets TWO cookies, and the second one exists to make a failure
+   * legible.
+   *
+   * The session cookie is HttpOnly, so the page cannot tell whether the browser
+   * kept it. When it does not — an in-app WebView with cookies off is the
+   * common case — enrolment fails with «لازم تسجّل دخول الأول», which is
+   * accurate and useless to somebody who activated their account one second
+   * ago. The probe carries no value and is readable, so its absence lets the
+   * page name the actual problem and the actual fix.
+   */
+  it('activation sets a readable probe beside the HttpOnly session cookie', async () => {
+    const token = passkey.randomToken();
+    await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(token),
+      'first_activation', NOW);
+    const r = await activate(token);
+
+    const cookies = r.headers.getSetCookie?.() ?? [r.headers.get('set-cookie') ?? ''];
+    assert.equal(cookies.length, 2,
+      'two Set-Cookie headers are needed; an object literal cannot carry the field twice');
+
+    const session = cookies.find(c => c.startsWith('qa_session='));
+    const probe = cookies.find(c => c.startsWith('qa_cookie_probe='));
+    assert.ok(session, 'no session cookie');
+    assert.ok(probe, 'no readable probe');
+    assert.match(session, /HttpOnly/, 'the session cookie became script-readable');
+    assert.ok(!/HttpOnly/.test(probe), 'the probe is invisible to the page, so it proves nothing');
+    // It must be worthless: it is readable by anything running on the page.
+    assert.match(probe, /^qa_cookie_probe=1;/);
+    assert.match(probe, /Max-Age=600/, 'the probe should not outlive the enrolment it guards');
+  });
+
   it('issuing a new link invalidates the previous one', async () => {
     const a = passkey.randomToken(), b = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(a), 'recovery', NOW);

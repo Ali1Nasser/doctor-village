@@ -90,8 +90,19 @@ ${HELPERS}
   btn.addEventListener('click', async () => {
     btn.disabled = true; btn.textContent = MSG.working;
     try {
+      // The session cookie is HttpOnly and therefore invisible here. The probe
+      // beside it is not, so its absence means the browser dropped BOTH — which
+      // is what an in-app WebView with cookies disabled does. Without this the
+      // enrolment call returns «لازم تسجّل دخول الأول» to somebody who has just
+      // this second activated their account: true, and no use to anyone.
+      if (!document.cookie.split(';').some(c => c.trim().startsWith('qa_cookie_probe='))) {
+        throw new Error(MSG.cookiesBlocked);
+      }
       const r = await fetch('/api/auth/enroll/begin', { method: 'POST' });
       const data = await r.json();
+      // A 401 here means the same thing arriving a step later — say the same
+      // actionable sentence rather than the raw one from the API.
+      if (r.status === 401) throw new Error(MSG.cookiesBlocked);
       if (!r.ok) throw new Error(data.error || MSG.failed);
       const o = data.options;
       o.challenge = b64u.dec(o.challenge);

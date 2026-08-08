@@ -20,6 +20,7 @@ const LOGIN_MSGS = {
   cancelled: t.login.errors.failed, submit: t.login.submit,
   needsActivation: t.login.firstTime, noPasskey: t.login.errors.noPasskey,
   enroll: t.activate.enroll, confirm: t.app.confirm,
+  cookiesBlocked: t.login.errors.cookiesBlocked,
 };
 const UPLOAD_MSGS = {
   compressing: t.pay.compressing, ready: t.app.confirm, tooBig: t.pay.errors.tooBig,

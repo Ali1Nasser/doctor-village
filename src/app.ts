@@ -282,11 +282,22 @@ export function createApp(deps: AppDeps) {
   // in the handler is DISCARDED. That silently dropped the session cookie on the
   // activation page: `c.header('set-cookie', …)` looked right and did nothing.
   // Headers a response needs must be passed in here, explicitly.
-  const html = (s: string, status = 200, headers: Record<string, string> = {}) =>
-    new Response(s, {
-      status,
-      headers: { 'content-type': 'text/html; charset=utf-8', ...headers },
-    });
+  /**
+   * `set-cookie` may be an ARRAY. Object-literal headers cannot express the
+   * same field twice, and a response that needs to set two cookies — the
+   * session and the readability probe on activation — would otherwise silently
+   * ship one, or ship both comma-joined into a single header that browsers
+   * discard. `Headers.append` is the only way to say it.
+   */
+  const html = (
+    s: string, status = 200, headers: Record<string, string | string[]> = {},
+  ) => {
+    const h = new Headers({ 'content-type': 'text/html; charset=utf-8' });
+    for (const [k, v] of Object.entries(headers)) {
+      for (const one of Array.isArray(v) ? v : [v]) h.append(k, one);
+    }
+    return new Response(s, { status, headers: h });
+  };
 
   /**
    * The board's own navigation, computed per caller.
@@ -478,7 +489,20 @@ export function createApp(deps: AppDeps) {
     const codes = Array.from({ length: 6 }, () => passkey.humanCode());
     await adb.issueRecoveryCodes(deps.db, used.profileId,
       await Promise.all(codes.map(x => passkey.sha256(x))), deps.now);
-    return html(v.activatePage(used.fullName, codes), 200, { 'set-cookie': cookie });
+    // A SECOND, readable cookie beside the session one.
+    //
+    // The session cookie is HttpOnly, so the page cannot tell whether the
+    // browser kept it — and when it does not, enrolment fails with «لازم تسجّل
+    // دخول الأول», which is true and completely unactionable. This probe is the
+    // same cookie minus HttpOnly and minus any value worth stealing: if the
+    // page cannot see it, cookies are being dropped, and it can say so and name
+    // the fix instead of reporting a login error to somebody who just logged in.
+    //
+    // Ten minutes, because it exists only for the seconds between this response
+    // and the enrolment call.
+    const probe = 'qa_cookie_probe=1; Path=/; Max-Age=600; SameSite=Lax; Secure';
+    return html(v.activatePage(used.fullName, codes), 200,
+      { 'set-cookie': [cookie, probe] });
   });
 
   app.post('/api/auth/enroll/begin', async c => {
