@@ -118,6 +118,11 @@ describe('the board screens are closed to everybody else', () => {
     ['/admin/settings',   ['tok-op', 'tok-res', 'tok-rev']],
     ['/admin/staff',      ['tok-res']],
     ['/admin/audit',      ['tok-op', 'tok-res']],
+    // ⭐ Residents hold `finance.read_totals` on purpose — the village totals
+    // are published. This screen names which FLATS the village owes money to,
+    // which is a different fact about a different person, so it sits behind
+    // `payment.read_any`.
+    ['/admin/settlements', ['tok-op', 'tok-res']],
   ];
 
   for (const [path, tokens] of CLOSED) {
@@ -136,6 +141,10 @@ describe('the board screens are closed to everybody else', () => {
     for (const [path] of CLOSED) {
       assert.equal((await req(path, 'tok-admin')).status, 200, `admin blocked from ${path}`);
     }
+  });
+
+  it('a finance_reviewer reaches the settlements screen — it is oversight', async () => {
+    assert.equal((await req('/admin/settlements', 'tok-rev')).status, 200);
   });
 
   it('a finance_reviewer reads the payroll and the audit log, and changes neither', async () => {

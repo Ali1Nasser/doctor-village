@@ -178,3 +178,70 @@ export async function vapidStatus(ctx: AuthContext, db: Db, publicKey?: string) 
     mismatch: !!(row && current && row.fingerprint !== current),
   };
 }
+
+/* ===================================================================== */
+/* Quiet hours                                                           */
+/* ===================================================================== */
+
+/**
+ * Is `now` inside the village's quiet hours?
+ *
+ * `settings.notify_quiet_from` / `notify_quiet_to` have existed since CP-1,
+ * appear on the settings screen, and were read by nothing. A setting a board
+ * turns on that changes no behaviour is worse than no setting: they believe
+ * the portal is not ringing an 80-year-old's phone at midnight, and it is.
+ *
+ * ## What "quiet" suppresses, and what it must never suppress
+ *
+ * Only the PUSH. The notification row is written in the same batch as the
+ * decision that caused it (R-065) and is already readable in `/notifications`
+ * before this is ever consulted. Quiet hours make the phone not buzz; they do
+ * not delay, drop or hide the message. Anything stronger would make the
+ * village's record depend on the time of day.
+ *
+ * ## Times are compared in Cairo local time
+ *
+ * The whole system stores UTC, and «من 10 مساءً» means ten in the evening in
+ * Marsa Matrouh, not in Greenwich. Egypt observes DST, so the offset is +02:00
+ * in winter and +03:00 in summer — computed here from the instant rather than
+ * hardcoded, because a hardcoded +02 would start buzzing phones at 11 pm every
+ * summer and nobody would connect the two.
+ *
+ * A window that wraps midnight (22:00 → 09:00, the default) is the normal
+ * case, not the edge case, so it is handled first.
+ */
+export function inQuietHours(nowIso: string, fromHHMM: string, toHHMM: string): boolean {
+  const mins = (hhmm: string): number | null => {
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hhmm ?? '');
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const from = mins(fromHHMM), to = mins(toHHMM);
+  if (from === null || to === null || from === to) return false;
+
+  // Cairo local time, DST included, without pulling in a timezone library:
+  // ask Intl for the wall-clock hour and minute at that instant.
+  let hh: number, mm: number;
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(nowIso));
+    hh = Number(parts.find(p => p.type === 'hour')?.value ?? NaN);
+    mm = Number(parts.find(p => p.type === 'minute')?.value ?? NaN);
+  } catch {
+    return false;   // an unparseable clock must not silence every notification
+  }
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return false;
+  const at = (hh % 24) * 60 + mm;
+
+  // 22:00 → 09:00 wraps midnight and is the default, so it comes first.
+  return from > to ? (at >= from || at < to) : (at >= from && at < to);
+}
+
+/** The configured window. Read per send rather than cached: an isolate can
+ *  live for hours, and a board that just widened quiet hours means now. */
+export async function quietWindow(db: Db): Promise<{ from: string; to: string }> {
+  const r = await db.prepare(
+    `SELECT notify_quiet_from AS "from", notify_quiet_to AS "to" FROM settings WHERE id = 1`
+  ).first<{ from: string; to: string }>();
+  return r ?? { from: '22:00', to: '09:00' };
+}

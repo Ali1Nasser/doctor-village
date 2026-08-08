@@ -1024,3 +1024,39 @@ removes both a cost risk *and* the longest-lead-time task in the project (Meta b
 verification), closing R-004 and R-017 together. `INSIGHTS` already recorded this pattern once — the
 cheapest option turning out to be the most usable. Check for it deliberately before accepting any
 trade-off as real; on this project it has now held three times.
+
+**[2026-08-08] [security] A control the client can decline is a claim, not a control.**
+`storage_objects.exif_stripped` was set to `1` by two call sites that had never looked at the bytes;
+the stripping was real but happened in the browser. So the column was true for every resident using
+the site and false for every request that skipped the page — and it was *most* likely to be false
+exactly when it mattered, because a request that skips the page is not the innocent case. The
+general form: when a column asserts a fact about data, the assertion has to be produced by the code
+that stores the data, not accepted from the code that sent it. Look for this shape wherever a
+boolean is passed *in* to a persistence function rather than derived inside it.
+
+**[2026-08-08] [agent] The bug was in the recovery path, not the happy path — twice.**
+The EXIF stripper's first version returned the ORIGINAL buffer when a file was truncated: it walked
+until the damaged chunk, found no metadata *before* that point, and fell through to "nothing to
+remove". Every happy-path test passed. The failure was indistinguishable from success, which is the
+worst property a security control can have. Same shape as the earlier activation-link bug, where the
+reject path was tested and the accept path was not. **Write the malformed-input test before the
+well-formed one** — on this project the error branch has now been wrong twice and the main branch
+zero times.
+
+**[2026-08-08] [design] Immutability and restorability are the same decision, and you only get told
+once.** Migration 0022 froze published dues — the right control, since a published amount is what a
+resident was *told* they owe. It immediately broke the demo seed, three test fixtures and
+`tools/backup.mjs`, all of which had been writing a state the application can never reach (a
+published period with dues inserted afterwards). CP-8 already taught this for posted journal
+entries; 0022 taught it again for fee periods. The rule to apply *before* writing the trigger: every
+control that makes a state immutable also makes it un-restorable unless the backup replays the
+transition that created it. The fixtures are the early warning — if a fixture cannot produce a state
+through the product's own path, the backup will not be able to either.
+
+**[2026-08-08] [product] "Built" and "reachable" are different, and the gap is invisible from the
+code.** Settlements had a schema, a data layer, 22 passing tests and zero routes. Every `/admin/*`
+screen existed and none was linked from anywhere, because the five nav tabs are the resident's. The
+project's own CHECKPOINTS file could not see this: it ticks capabilities, and a capability with no
+door is still a capability. **The check that catches it is "name the sequence of taps from the login
+screen"** — for onboarding 204 residents, for opening next year's subscription, for closing a month.
+If any step in that sentence is "type a URL", it is not built.

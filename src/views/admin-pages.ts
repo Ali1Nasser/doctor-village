@@ -607,3 +607,160 @@ export function auditPage(d: { rows: AuditRow[] }): string {
   </table></div>`}
 </div>`);
 }
+
+/* ===================================================================== */
+/* /admin/settlements                                                    */
+/* ===================================================================== */
+
+/**
+ * The three accounting cycles that had a data layer, a schema and 22 passing
+ * tests, and no way in.
+ *
+ * Everything a treasurer needs to close a month is on one page: what the bank
+ * says that the books do not, what the village owes owners, and whether the
+ * year can be closed. They are on one page because they are one job — a period
+ * cannot close while a difference is open, and discovering that on a different
+ * screen after clicking "close" is how a treasurer concludes the software is
+ * broken.
+ */
+const SETTLE_KIND_AR: Record<string, string> = {
+  bank_fee: t.settle.kindBankFee,
+  bank_interest: t.settle.kindBankInterest,
+  timing: t.settle.kindTiming,
+  unrecorded_in: t.settle.kindUnrecordedIn,
+  unrecorded_out: t.settle.kindUnrecordedOut,
+};
+
+export interface SettlementRow {
+  id: string; kind: string; amount_piastres: number; reason_ar: string;
+  status: string; requested_by: string; requested_by_name: string;
+  requested_at: string; period_id: string; as_of: string;
+}
+export interface CreditRow {
+  credit_id: string; unit_id: string; remaining_piastres: number; unit_label: string;
+}
+export interface PeriodRow {
+  id: string; name_ar: string; starts_on: string; ends_on: string;
+  status: string; closed_by_name: string | null; reopen_reason_ar: string | null;
+}
+
+export function settlementsPage(d: {
+  suspense: { balance_piastres: number; entries: number };
+  settlements: SettlementRow[];
+  credits: CreditRow[];
+  periods: PeriodRow[];
+  /** The caller, so a maker is never offered the button that approves their own. */
+  me: string;
+  canApprove: boolean;
+  canClose: boolean;
+  flash?: string;
+  error?: string;
+}): string {
+  const settlement = (s: SettlementRow) => {
+    const mine = s.requested_by === d.me;
+    return `
+  <div class="row">
+    <span class="ico" aria-hidden="true">${s.kind === 'timing' ? '⏳' : '🏦'}</span>
+    <span class="row-body">
+      <b>${esc(SETTLE_KIND_AR[s.kind] ?? s.kind)} — ${money(s.amount_piastres)}</b>
+      <span class="muted">${esc(s.reason_ar)}</span>
+      <span class="muted">${esc(t.settle.requestedBy)} ${esc(s.requested_by_name)}
+        · ${arDate(s.requested_at)}</span>
+      ${mine ? `<span class="chip warn">${esc(t.settle.makerChecker)}</span>` : ''}
+    </span>
+    <span class="row-end">
+      ${!d.canApprove || mine ? '' : s.kind === 'timing'
+        ? `<details>
+             <summary class="btn btn-2 btn-sm">${esc(t.settle.dismiss)}</summary>
+             <p class="hint">${esc(t.settle.timingHint)}</p>
+             <form method="post" action="/admin/settlements/${esc(s.id)}/dismiss">
+               <div class="field">
+                 <label for="n-${esc(s.id)}">${esc(t.settle.dismissNote)}</label>
+                 <textarea id="n-${esc(s.id)}" name="note" rows="2" required></textarea>
+               </div>
+               <button class="btn btn-2" type="submit">${esc(t.settle.done)}</button>
+             </form>
+           </details>`
+        : `<form method="post" action="/admin/settlements/${esc(s.id)}/approve" class="inline-form">
+             <input type="hidden" name="period" value="${esc(s.period_id)}">
+             <button class="btn btn-2 btn-sm" type="submit">${esc(t.settle.approve)}</button>
+           </form>`}
+    </span>
+  </div>`;
+  };
+
+  const period = (p: PeriodRow) => `
+  <div class="row">
+    <span class="ico" aria-hidden="true">${
+      p.status === 'closed' ? '🔒' : p.status === 'reopened' ? '🔓' : '📂'}</span>
+    <span class="row-body">
+      <b>${esc(p.name_ar)}</b>
+      <span class="muted">${arDate(p.starts_on)} → ${arDate(p.ends_on)}</span>
+      <span class="chip ${p.status === 'closed' ? 'ok' : p.status === 'reopened' ? 'warn' : 'mute'}">${
+        esc(p.status === 'closed' ? t.settle.statusClosed
+          : p.status === 'reopened' ? t.settle.statusReopened : t.settle.statusOpen)}</span>
+      ${p.reopen_reason_ar ? `<span class="muted">${esc(p.reopen_reason_ar)}</span>` : ''}
+    </span>
+    <span class="row-end">
+      ${!d.canClose ? '' : p.status === 'closed'
+        ? `<details>
+             <summary class="btn btn-2 btn-sm">${esc(t.settle.reopen)}</summary>
+             <form method="post" action="/admin/periods/${esc(p.id)}/reopen">
+               <div class="field">
+                 <label for="rr-${esc(p.id)}">${esc(t.settle.reopenReason)}</label>
+                 <textarea id="rr-${esc(p.id)}" name="reason" rows="2" required></textarea>
+               </div>
+               <button class="btn btn-2" type="submit">${esc(t.settle.reopen)}</button>
+             </form>
+           </details>`
+        : `<form method="post" action="/admin/periods/${esc(p.id)}/close" class="inline-form">
+             <button class="btn btn-2 btn-sm" type="submit">${esc(t.settle.close)}</button>
+           </form>`}
+    </span>
+  </div>`;
+
+  return page({ title: t.settle.title, active: 'finance' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">${esc(t.settle.title)}</h2>
+  <p class="muted">${esc(t.settle.subtitle)}</p>
+  ${d.error ? banner('warn', d.error) : ''}
+  ${d.flash ? banner('ok', d.flash) : ''}
+</div>
+
+<div class="card">
+  <div class="tile" style="--tc:${d.suspense.balance_piastres === 0 ? 'var(--ok)' : 'var(--warn)'};
+       --tsoft:${d.suspense.balance_piastres === 0 ? 'var(--ok-soft)' : 'var(--warn-soft)'}">
+    <div class="lbl"><span class="ico" aria-hidden="true">❔</span>${esc(t.settle.suspense)}</div>
+    <div class="v">${money(d.suspense.balance_piastres)}</div>
+    <div class="note">${esc(t.settle.suspenseHint)}</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🏦 ${esc(t.settle.openTitle)}</h3>
+  ${d.settlements.length === 0
+    ? empty('✅', t.settle.openEmpty, t.settle.openEmptyHint)
+    : d.settlements.map(settlement).join('')}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">💳 ${esc(t.settle.creditsTitle)}</h3>
+  <p class="muted">${esc(t.settle.creditsHint)}</p>
+  ${d.credits.length === 0
+    ? empty('👍', t.settle.creditsEmpty, t.settle.creditsEmptyHint)
+    : d.credits.map(c => `
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>${esc(c.unit_label)}</b>
+        <span class="muted">${esc(t.settle.remaining)} ${money(c.remaining_piastres)}</span>
+      </span>
+    </div>`).join('')}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">📅 ${esc(t.settle.periodsTitle)}</h3>
+  <p class="hint">${esc(t.settle.periodsHint)}</p>
+  ${d.periods.map(period).join('')}
+</div>`);
+}

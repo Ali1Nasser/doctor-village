@@ -310,8 +310,15 @@ export async function reverseAdjustment(
   return { entryId };
 }
 
+/**
+ * NOT `finance.read_totals` — residents hold that one, because the village's
+ * totals are published on purpose. These rows name a person and describe a
+ * difference the board has not resolved yet, which is oversight material, not
+ * transparency material. `payment.read_any` is held by the board and the
+ * finance reviewer and by nobody else.
+ */
 export async function listOpenSettlements(ctx: AuthContext, db: Db) {
-  require_(ctx.role, 'finance.read_totals');
+  require_(ctx.role, 'payment.read_any');
   const r = await db.prepare(
     `SELECT s.*, p.full_name AS requested_by_name
        FROM v_open_settlements s
@@ -460,8 +467,10 @@ export async function approveAndPostCreditOperation(
   return { entryId };
 }
 
+/** Per-unit, so per-owner: what the village owes each named flat. Same
+ *  boundary as the settlements list, for the same reason. */
 export async function listOpenCredits(ctx: AuthContext, db: Db) {
-  require_(ctx.role, 'finance.read_totals');
+  require_(ctx.role, 'payment.read_any');
   const r = await db.prepare(
     `SELECT v.credit_id, v.unit_id, v.remaining_piastres,
             b.name_ar || ' — ' || u.unit_number AS unit_label
@@ -561,5 +570,29 @@ export async function periodHistory(ctx: AuthContext, db: Db, periodId: Id) {
       WHERE e.period_id = ?
       ORDER BY e.created_at DESC, e.rowid DESC`
   ).bind(periodId).all();
+  return r.results ?? [];
+}
+
+/**
+ * The fiscal years, for the settlements screen.
+ *
+ * `closed_by` is resolved to a name and `reopen_reason_ar` is carried through,
+ * because a reopened year is the one state on that screen that has to explain
+ * itself. Reopening is deliberately uncomfortable — a different person and a
+ * written reason — and the reason belongs where the year is listed, not in a
+ * log somebody has to go looking for.
+ */
+export async function listPeriods(ctx: AuthContext, db: Db) {
+  require_(ctx.role, 'payment.read_any');
+  const r = await db.prepare(
+    `SELECT f.id, f.name_ar, f.starts_on, f.ends_on, f.status, f.reopen_reason_ar,
+            p.full_name AS closed_by_name
+       FROM fiscal_periods f
+       LEFT JOIN profiles p ON p.id = f.closed_by
+      ORDER BY f.starts_on DESC LIMIT 20`
+  ).all<{
+    id: string; name_ar: string; starts_on: string; ends_on: string;
+    status: string; reopen_reason_ar: string | null; closed_by_name: string | null;
+  }>();
   return r.results ?? [];
 }

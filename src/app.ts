@@ -26,6 +26,7 @@ import * as adb from '../lib/db/auth.js';
 import * as drafts from '../lib/db/drafts.js';
 import * as onboard from '../lib/db/onboarding.js';
 import * as fees from '../lib/db/fees.js';
+import * as settle from '../lib/db/settlements.js';
 import * as adm from '../lib/db/admin.js';
 import * as av from './views/admin-pages.js';
 import * as mutations from '../lib/db/mutations.js';
@@ -286,6 +287,7 @@ export function createApp(deps: AppDeps) {
     add('payment.read_any', '/admin/payments', '✅', _t.admin.approvedTitle);
     add('expense.record', '/admin/expenses', '💸', _t.expenses.title);
     add('fee.manage', '/admin/fees', '📅', _t.fees.title);
+    add('payment.read_any', '/admin/settlements', '🏦', _t.settle.title);
     add('post.publish', '/admin/content', '✍️', _t.content.manage);
     add('category.manage', '/admin/categories', '🏷️', _t.categories.title);
     add('user.assign_role', '/admin/users', '🛡️', _t.users.title);
@@ -868,6 +870,15 @@ export function createApp(deps: AppDeps) {
   const pushLatest = async (profileId: string) => {
     if (!deps.vapid) return;
     try {
+      // Quiet hours suppress the BUZZ and nothing else. The notification row is
+      // already written and already readable at /notifications; this only
+      // decides whether an 80-year-old's phone lights up at one in the morning.
+      // The setting has existed since CP-1, appeared on the settings screen,
+      // and was read by nothing — a switch the board turns on that changes no
+      // behaviour is worse than no switch, because they believe it worked.
+      const q = await push.quietWindow(deps.db);
+      if (push.inQuietHours(deps.now(), q.from, q.to)) return;
+
       const [msg] = await data.latestNotificationFor(deps.db, profileId as never) as
         Array<Record<string, unknown>>;
       if (!msg) return;
@@ -1708,6 +1719,90 @@ export function createApp(deps: AppDeps) {
     const ctx = need(c);
     if (!can(ctx.role, 'audit.read')) throw new Forbidden('audit.read');
     return html(av.auditPage({ rows: await adm.auditFeed(ctx, deps.db) }));
+  });
+
+  /* ---- settlements, credits and period close (CP-5) --------------------- */
+
+  /**
+   * Three accounting cycles that had a schema, a data layer and 22 passing
+   * tests, and no way in. A difference the bank showed could be recorded and
+   * never resolved; a credit could exist and never be given back. Both are the
+   * shapes that quietly become "the board is keeping my money".
+   *
+   * They share one screen because they are one job. A year cannot close while
+   * a difference is open — `trg_period_close_needs_reconciliation` says so —
+   * and finding that out on a different page after pressing "close" is how a
+   * treasurer decides the software is broken.
+   *
+   * Maker–checker is enforced in the data layer and in the schema; the screen
+   * simply does not draw an approve button for the person who raised the
+   * difference, so nobody is invited to press something that will refuse.
+   */
+  const settlementsScreen = async (ctx: AuthContext, flash?: string, error?: string) =>
+    av.settlementsPage({
+      suspense: await settle.suspenseBalance(ctx, deps.db),
+      settlements: await settle.listOpenSettlements(ctx, deps.db) as never,
+      credits: await settle.listOpenCredits(ctx, deps.db) as never,
+      periods: await settle.listPeriods(ctx, deps.db) as never,
+      me: ctx.personId,
+      canApprove: can(ctx.role, 'expense.countersign'),
+      canClose: can(ctx.role, 'period.close'),
+      flash, error,
+    });
+
+  app.get('/admin/settlements', async c => {
+    const ctx = need(c);
+    // NOT `finance.read_totals`: residents hold that, and this screen names
+    // which flats the village owes money to. `payment.read_any` is the board
+    // and the finance reviewer.
+    if (!can(ctx.role, 'payment.read_any')) throw new Forbidden('payment.read_any');
+    return html(await settlementsScreen(ctx));
+  });
+
+  /** All four actions land back on the same screen, with the refusal shown in
+   *  place rather than as a bare 409 — the treasurer needs to see WHICH guard
+   *  refused while looking at the thing that refused. */
+  const settleAction = async (
+    c: { get(k: 'ctx'): AuthContext | null }, run: (ctx: AuthContext) => Promise<void>,
+  ) => {
+    const ctx = need(c);
+    try {
+      await run(ctx);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await settlementsScreen(ctx, undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await settlementsScreen(ctx, undefined, e.reasonAr), 403);
+      throw e;
+    }
+    return html(await settlementsScreen(ctx, _t.settle.done));
+  };
+
+  app.post('/admin/settlements/:id/approve', async c => {
+    const f = await c.req.parseBody();
+    return settleAction(c, async ctx => {
+      await settle.approveAndPostAdjustment(ctx, deps.db, c.req.param('id') as never,
+        String(f['period'] ?? '') as never, deps.now);
+    });
+  });
+
+  app.post('/admin/settlements/:id/dismiss', async c => {
+    const f = await c.req.parseBody();
+    return settleAction(c, async ctx => {
+      await settle.dismissTiming(ctx, deps.db, c.req.param('id') as never,
+        String(f['note'] ?? ''), deps.now);
+    });
+  });
+
+  app.post('/admin/periods/:id/close', async c =>
+    settleAction(c, async ctx => {
+      await settle.closePeriod(ctx, deps.db, c.req.param('id') as never, deps.now);
+    }));
+
+  app.post('/admin/periods/:id/reopen', async c => {
+    const f = await c.req.parseBody();
+    return settleAction(c, async ctx => {
+      await settle.reopenPeriod(ctx, deps.db, c.req.param('id') as never,
+        String(f['reason'] ?? ''), deps.now);
+    });
   });
 
   /* ---- annual statement (CP-7) ------------------------------------------ */

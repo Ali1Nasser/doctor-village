@@ -99,3 +99,16 @@ Status: `open` · `mitigated` · `accepted` · `closed`
 ## Adding a risk
 Append a row. Any risk that would cost real money, leak private data, or lose the community's trust
 is at least 🟠. When you are tempted to skip a checkpoint gate, that temptation becomes a row here.
+
+---
+
+## Added 2026-08-08 (session 27)
+
+| ID | Sev | Risk | Mitigation / state |
+|---|---|---|---|
+| R-072 | ✅ **CLOSED** | An uploaded receipt kept its GPS coordinates while the database recorded that its metadata had been removed. The stripping was client-side only. | `lib/storage/image.ts` parses the container server-side (WebP/JPEG/PNG) and refuses anything else; `exif_stripped` is now set from what actually happened. 12 byte-level tests. |
+| R-073 | ✅ **CLOSED** | A category could never be retired once used, and the "reassign first" it demanded would have rewritten settled history — receipt and `journal_lines` disagreeing about where money went. | Retirement blocks on in-flight work only; settled history never blocks and is never moved. |
+| R-074 | ✅ **CLOSED** | Quiet hours were stored and displayed and read by nothing. The board would believe the portal had stopped ringing phones at night. | Honoured in `pushLatest`, Cairo wall-clock including DST, suppressing the push only — the notification row is always written. |
+| R-075 | 🟠 | **A published subscription cannot be corrected, by design.** If the board publishes the wrong amount, the only remedy in the product is a waiver per flat or a corrective period. On 204 flats that is 204 waivers. | Accepted for now: the alternative is an edit that silently restates every resident's arrears. A "correct a published period" flow with its own maker–checker is the right answer and is not built. Watch for this the first time a real subscription is published. |
+| R-076 | 🟠 | **A HEIC photo is refused outright.** iPhones default to HEIC, and the browser upload path converts to WebP — but a resident who somehow posts the original gets an error rather than a receipt. | The message names what to do. If Matrouh's iPhone share turns out to matter, the fix is a server-side decode, which is a real dependency in a Worker and was deliberately not taken. |
+| R-077 | 🟡 | The audit screen shows the last 200 rows with no filter and no paging. At a few hundred writes a month this is a year of history; beyond that, "who changed the bank number in March" becomes unanswerable from the UI. | Fine for launch. Add actor/date filters before the first AGM that asks the question. |

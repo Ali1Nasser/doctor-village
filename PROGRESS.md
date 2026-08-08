@@ -9,11 +9,34 @@
 
 | | |
 |---|---|
-| **Checkpoint** | CP-6 done (both gates met) · CP-7 statement+a11y done · CP-8 restore gate MET |
-| **Status** | 🟢 **476 checks green** (89 unit · 291 access · 48 ledger · 34 demo · 9 restore-drill · 2 lint · typecheck · 24 screens). **Twelve** presentation-layer defects found and fixed across sessions 10–13 (R-043, R-045…R-048, R-050…R-056) — and **zero** ledger defects. The controls on this project are pointed at the wrong layer. |
-| **Last updated** | 2026-08-06 (session 25) |
+| **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
+| **Status** | 🟢 **~600 checks green** (101 unit · 369 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · 33 screens rendered). Live on Cloudflare with all 22 migrations applied to real D1. |
+| **Last updated** | 2026-08-08 (session 27) |
 | **Updated by** | agent |
-| **Blocked?** | **Not blocked for building.** CP-3 needs nothing external. But **CP-2 cannot be signed off from here**: its last two gates need a real phone against a real deployed origin, and the D1 `STRICT`/`RAISE(ABORT)` verification (A-05, R-031) has been open since day one. Run `bash tools/verify-d1.sh`. |
+| **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 27
+
+The board can now **operate** the village from the product. Six configuration screens went in —
+fees, categories, roles, settings, staff, audit — plus settlements and a members screen. Before
+this session every one of those tables existed in the schema and could only be changed by a
+programmer running SQL, which is the exact dependency this project exists to remove.
+
+Three things were not merely missing but *wrong*, and are worth carrying forward:
+
+1. **`exif_stripped` was a claim, not a control.** Both upload paths passed `exifStripped: true`
+   on bytes nothing had parsed; the stripping happened in the browser. A request that skipped the
+   page stored a photo with the GPS coordinates of a flat and a column saying otherwise. Now
+   `lib/storage/image.ts` parses the container server-side.
+2. **`deactivateCategory` had its rule backwards** — it blocked on settled history (making
+   retirement impossible) and the reassignment it demanded would have rewritten last year's chart.
+3. **Quiet hours were stored, displayed, and read by nothing.** A switch the board turns on that
+   changes no behaviour is worse than no switch.
+
+The pattern in all three: the control existed at the layer that is easy to write and not at the
+layer that decides. That is the same lesson as CP-8's restore drill, and 0022 repeated it in
+miniature — freezing published dues immediately broke the demo seed, three test fixtures and the
+backup, all of which had been writing a state the application can never reach.
 
 ---
 
@@ -26,10 +49,10 @@
 | 2 | Authentication | 🟢 nearly done | 5/8 | Passkeys, activation, printed-code recovery, **two-admin assisted recovery**, **bulk import**. The 3 open gates all need a **real phone against a real origin** or a real deployment — none can be closed from this sandbox. No passkey listing/revocation screen yet |
 | 3 | Read-only transparency | 🟢 **gates met** | 2/2 | `/finance`, `/finance/units`, `/admin/health` built. Rendered figures verified against hand-computed literals **and** against raw SQL. **Found and fixed a real arrears bug (R-043).** Outstanding: a period filter, before year two |
 | 4 | Payments | 🟢 nearly done | 3/6 | Wizard, upload, duplicate warning, review queue, idempotent posting, **reversal**, decision notifications. The 3 open gates need a **real phone on a real network** — nothing else. *(Ticked 2026-08-05 after finding the boxes had drifted from the code for several sessions.)* |
-| 5 | Expenses | 🟡 usable | 4/8 | Record → countersign → post → reverse, **from a phone with no JS**. Both ⭐ gates met. Outstanding: invoice photo, reconciliation, the reopening flow, **payment reversal** |
-| 6 | Content & memory | ⬜ **not started** | 0/2 | News, albums, minutes, maintenance tickets, Arabic search. Arabic folding requirement discovered early — see R-033 |
-| 7 | Notifications & polish | 🟡 partly, out of order | 0/6 | Web Push + the inbox were built early because Q23 forced the question. **The gates are all observation gates** — a real elderly resident, a real phone, a real network — and none can be met from this sandbox |
-| 8 | Hardening & handover | ⬜ **not started** | 0/7 | Backup + **tested restore**, the Arabic admin manual, the board handover, penetration pass. This is the checkpoint that decides whether the board can run this without me |
+| 5 | Expenses & fees | 🟢 **gates met** | 8/8 | Record → countersign → post → reverse from a phone with no JS · invoice photo · **fee periods & dues generation** (`/admin/fees`, draft→distribute→publish, amounts frozen at publication by 0022) · **reconciliation, credits and period close** (`/admin/settlements`) · categories, roles, settings, staff, audit. Outstanding: monthly statement snapshots |
+| 6 | Content & memory | 🟢 **gates met** | 2/2 | News, albums, minutes, maintenance tickets, Arabic search with orthographic folding (`lib/search/fold.ts` — unicode61 does NOT handle Arabic, R-033). Both gates asserted over HTTP |
+| 7 | Notifications & polish | 🟡 partly | 1/6 | Web Push + inbox + annual statement + theme/font-size with no JS + **quiet hours actually honoured** + **server-side EXIF stripping**. The remaining gates are observation gates — an elderly resident, Lighthouse, a WCAG audit — and none can be met from a sandbox |
+| 8 | Hardening & handover | 🟡 partly | 2/7 | **Restore drill MET** (proves `.dump` fails first, then restores and compares 14 figures) and the deploy workflow. Outstanding: the Arabic admin manual, monitoring, the accountant and the lawyer. This is the checkpoint that decides whether the board can run this without me |
 
 ---
 

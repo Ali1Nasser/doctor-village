@@ -66,8 +66,13 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
       impossible to insert into a production database, verified in both directions
 
 **Gates**
-- [ ] ⭐ **FIRST, BEFORE ANY APPLICATION CODE:** `wrangler d1 migrations apply` succeeds against a
-      real D1 database, and D1 accepts **`STRICT` tables** and **`RAISE(ABORT)` inside triggers**.
+- [x] ⭐ **CLOSED 2026-08-07 by deploying.** All 22 migrations apply on real D1 — 65 tables,
+      64 triggers, 25 views — and D1 accepts both `STRICT` and `RAISE(ABORT)`. A-05 / R-031 are
+      closed. It also found what 519 local checks could not: a 13-character-class `GLOB` in the
+      phone CHECK that real D1 refuses with "LIKE or GLOB pattern too complex". The table CREATED
+      fine; the failure appeared only on the first INSERT. Measured: 10 classes pass, 13 do not.
+      *(historic gate text: `wrangler d1 migrations apply` succeeds against a real D1 database, and
+      D1 accepts `STRICT` tables and `RAISE(ABORT)` inside triggers.)*
       Cloudflare documents neither; the whole financial-integrity layer rests on both (A-05, R-031).
       If it fails: strip `, STRICT`, move trigger logic into `lib/db/`, and **immediately re-raise
       R-020** — that fallback is strictly weaker.
@@ -250,8 +255,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 *Goal: money out, categorized, transparent.*
 
 - [x] Chart of accounts, funds, cost centers, fiscal periods, journal engine
-- [ ] Allocation rules: partial, overpayment → credit, waiver, penalty, refund, reclassification
-- [ ] Monthly reconciliation against the real bank/InstaPay balance + freshness indicator
+- [x] Allocation rules — partial and overpayment→credit in `lib/db/index.ts`; waiver in
+      `lib/db/fees.ts` (beside the amount, never instead of it); refund and reclassification in
+      `lib/db/settlements.ts`; penalty as a category `kind`
+- [x] Reconciliation against the bank statement — `reconciliation_adjustments` with its own
+      maker–checker, `/admin/settlements`, and `as_of` as the freshness indicator
 - [ ] Immutable monthly statement snapshots
 - [~] Expense entry (operator, ≤ 60 seconds) — **`/admin/expenses` exists**: record, countersign,
       post and reverse, all plain form posts with **no JavaScript on the page**. Five fields,
@@ -268,8 +276,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
       which flips the entry direction and closes the original in one batch. The reversal is an
       ordinary expense row, so every guard protects it for free. The original is never edited —
       tests assert its amount and date are untouched, not just that the totals net.
-- [ ] Category management CRUD with forced reassignment on deactivate
-- [ ] Staff & salaries with name-visibility rule
+- [x] Category management CRUD — **without** forced reassignment, deliberately. Reassigning a
+      settled payment would make the receipt and `journal_lines` disagree about where the money
+      went and would change last year's chart after the fact. Closed work never blocks a
+      retirement; in-flight work does. Deviation recorded here rather than silently.
+- [x] Staff & salaries — `/admin/staff`, gated on `staff.read_names` (residents hold
+      `staff.read_salaries`, because the payroll TOTAL is published on purpose)
 
 **Gates**
 - [x] ⭐ **`v_deposit_leakage` is empty after every posting** — asserted after each posting in
@@ -279,17 +291,19 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
       **displayed** figure against a hand computation") is honoured literally: the tile is parsed
       out of the rendered HTML. **Stronger than asked:** `trg_expense_fund_spendable_*` makes an
       expense against a non-spendable fund *impossible*, not merely visible (R-060).
-- [ ] `assets == liabilities + funds + (income − expenses)` holds after every posting
+- [x] `assets == liabilities + funds + (income − expenses)` — `verify_ledger.py`, residual exactly 0
       — ⚠️ **ADR-018: this is a tautology under balanced double-entry.** It catches half-posted
       entries and corrupted restores, **not** misclassification. It must never be the only check.
-- [ ] Every journal entry balances; an overpayment becomes a resident credit
+- [x] Every journal entry balances; an overpayment becomes a resident credit
 - [~] A closed fiscal period rejects ordinary writes — tested at **posting** time
       (`trg_entry_period_open_at_posting`, the gap 0002's insert-time trigger left open).
       **Reopening's second-admin + re-auth flow is not built.**
 - [x] `Σ per-category == total expenses` holds — after every posting, and R-047 made
       double-counting structurally impossible rather than accidentally absent
-- [ ] Deactivating a category with existing entries is blocked until reassignment
-- [ ] An operator cannot approve a payment or read a phone number (re-verified post-changes)
+- [x] Deactivating a category is blocked by work IN FLIGHT — a receipt under review, an
+      unposted expense, a live published subscription. Settled history does not block; see the
+      deviation above.
+- [x] An operator cannot approve a payment or read a phone number — re-verified in `board_config.test.ts`
 
 ---
 
@@ -300,7 +314,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 - [x] Maintenance albums with photos, dates, and links to the matching expense
 - [x] Documents & meeting minutes archive (post types `minutes` / `document`)
 - [x] Arabic full-text search across all of the above — `lib/search/fold.ts`
-- [ ] Fee periods & dues generation (periods exist and are seeded; no generation UI)
+- [x] Fee periods & dues generation — `/admin/fees`: draft → distribute → publish, with
+      `missing_units` on screen so a subscription that billed 180 of 204 flats cannot look like a
+      success. Publication freezes the amounts in the schema (0022).
 
 **Gates**
 - [x] Searching an Arabic word from inside a PDF-attached post returns that post
@@ -311,8 +327,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 ---
 
 ## CP-7 — Notifications & polish
-- [ ] WhatsApp/in-app notifications: approval, rejection, new announcement, payment reminder
-- [ ] Notification quiet hours honored
+- [~] In-app notifications on approval and rejection — written in the SAME batch as the
+      decision (R-065), plus Web Push. New-announcement and payment-reminder notifications are
+      **not** built. WhatsApp is out of scope entirely (ADR-016).
+- [x] Quiet hours honoured — Cairo wall-clock including DST, suppressing the PUSH only; the
+      notification row is always written and always readable
 - [x] Font-size toggle, dark mode — cookie + form POST, no JavaScript at all
 - [x] Annual statement per unit (print-styled page → browser's own Save-as-PDF;
       a PDF engine is 2–8 MB inside a 10 ms Worker budget for an identical result)
@@ -324,7 +343,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 - [ ] **WCAG 2.2 AA** review with no unresolved blocker — including *Target Size* and *Accessible
       Authentication*, tested across the **whole** login and payment journeys, not components
 - [ ] Keyboard-only completion of the full payment flow; screen-reader semantics in Arabic
-- [ ] EXIF/geolocation stripped from every uploaded image, verified on a real phone photo
+- [~] EXIF/geolocation stripped **on the server**, from bytes it actually parses —
+      `lib/storage/image.ts`, WebP/JPEG/PNG, refusing anything else. It was previously stripped
+      only in the browser while the database recorded `exif_stripped = 1` regardless. Still
+      unticked because the gate says *verified on a real phone photo*, and it has been verified
+      on synthesised containers and a Chromium-encoded WebP, not on a photo off somebody's
+      Android.
 - [ ] Every screen reviewed against the six-state checklist
 
 ---

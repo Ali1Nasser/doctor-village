@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>الرئيسية — بوابة قرية الأطباء</title>
+<title>التسويات وأرصدة الملّاك — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -298,13 +298,13 @@ header .htext{flex:1;min-inline-size:0}
   <div class="hctl">
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="">
+      <input type="hidden" name="next" value="/admin/settlements">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="">
+      <input type="hidden" name="next" value="/admin/settlements">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -313,104 +313,146 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
   <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
-  <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
+  <a href="/finance" aria-current="page"><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
   <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
 </nav>
 <a class="fab" href="/help">💬 محتاج مساعدة؟</a>
 <main id="main">
 
-<div class="banner warn demo">⚠️ كل الأرقام والأسماء هنا متخيّلة — دي معاينة قبل ما بيانات القرية الحقيقية توصل.</div>
+
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
-<div class="banner info"><strong>📌 اجتماع الجمعية العمومية — 21 أغسطس</strong><br>جدول الأعمال: البيان المالي لسنة 2026، اشتراك 2027، وانتخاب عضوين جدد بالمجلس.</div>
-
 <div class="card">
-  <div class="muted">أهلاً يا د. خالد الشناوي (رئيس المجلس) ·
-    عمارة <bdi dir="ltr" class="num">—</bdi> شقة <bdi dir="ltr" class="num">—</bdi></div>
-  <div class="muted" style="margin-block-start:10px">إجمالي المطلوب منك</div>
-  <div class="hero"><bdi dir="ltr" class="num">0.00</bdi> <span class="cur">ج.م</span></div>
+  <h2 style="margin-block-start:0">التسويات وأرصدة الملّاك</h2>
+  <p class="muted">فروق البنك، والفلوس اللي القرية مدينة بيها لملّاك، وقفل السنة</p>
   
-  <div class="chip mute">لسه ماطلعش عليك اشتراك السنة دي. لما يطلع هيبان هنا.</div>
   
-  <a class="btn" href="/pay">دفع جديد</a>
-  <a class="btn btn-2" href="/payments">شوف إيصالاتي</a>
 </div>
 
-<h2>فلوس القرية</h2>
-<div class="tiles">
-  <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
-    <div class="lbl"><span class="ico" aria-hidden="true">✔</span>الفلوس المتاحة للصرف</div>
-    <div class="v"><bdi dir="ltr" class="num">746,450.00</bdi> <span class="cur">ج.م</span></div>
-  </div>
-  <div class="tile" style="--tc:var(--ink-muted);--tsoft:var(--surface-2)">
-    <div class="lbl"><span class="ico" aria-hidden="true">🔒</span>ودائع وأرصدة للملاك</div>
-    <div class="v"><bdi dir="ltr" class="num">282,600.00</bdi> <span class="cur">ج.م</span></div>
-    <div class="note">ودائع وزيادات دفع للملاك — أمانات مش ملك القرية، بتترد لأصحابها</div>
+<div class="card">
+  <div class="tile" style="--tc:var(--ok);
+       --tsoft:var(--ok-soft)">
+    <div class="lbl"><span class="ico" aria-hidden="true">❔</span>حساب الوسيط</div>
+    <div class="v"><bdi dir="ltr" class="num">0.00</bdi> <span class="cur">ج.م</span></div>
+    <div class="note">أي مبلغ في البنك لسه محدش عرف مصدره بيقعد هنا لحد ما يتحدّد. الرقم ده المفروض يرجع صفر.</div>
   </div>
 </div>
-<a class="btn btn-2" href="/finance">فلوس القرية ←</a>
 
-
-<h2>أدوات المجلس</h2>
 <div class="card">
-  <p class="muted" style="margin-block-start:0">الشاشات دي بتظهر لك إنت بس، على قد صلاحيتك.</p>
-  <div class="tools">
-    
-    <a class="tool" href="/admin/members">
-      <span class="ico" aria-hidden="true">👥</span>الأعضاء والتفعيل
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/review">
-      <span class="ico" aria-hidden="true">🧾</span>مراجعة الإيصالات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/payments">
-      <span class="ico" aria-hidden="true">✅</span>الإيصالات المعتمدة
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/expenses">
-      <span class="ico" aria-hidden="true">💸</span>المصروفات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/fees">
-      <span class="ico" aria-hidden="true">📅</span>الاشتراكات والمستحقات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/settlements">
-      <span class="ico" aria-hidden="true">🏦</span>التسويات وأرصدة الملّاك
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/content">
-      <span class="ico" aria-hidden="true">✍️</span>إدارة المحتوى
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/categories">
-      <span class="ico" aria-hidden="true">🏷️</span>بنود الإيرادات والمصروفات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/users">
-      <span class="ico" aria-hidden="true">🛡️</span>الأدوار والصلاحيات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/staff">
-      <span class="ico" aria-hidden="true">👷</span>الموظفين والمرتبات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/audit">
-      <span class="ico" aria-hidden="true">📜</span>سجل التغييرات
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/settings">
-      <span class="ico" aria-hidden="true">⚙️</span>إعدادات القرية
-      <span class="go" aria-hidden="true">←</span>
-    </a>
-    <a class="tool" href="/admin/health">
-      <span class="ico" aria-hidden="true">📊</span>حالة الخدمات والاستهلاك
-      <span class="go" aria-hidden="true">←</span>
-    </a>
+  <h3 style="margin-block-start:0">🏦 فروق مستنية تسوية</h3>
+  <div class="empty"><div class="big" aria-hidden="true">✅</div><p>مفيش فروق مستنية</p><p class="muted">يعني كشف البنك والدفاتر متطابقين.</p></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">💳 أرصدة ملّاك مفتوحة</h3>
+  <p class="muted">دي فلوس القرية مدينة بيها لملّاك — زيادة في الدفع أو مبلغ اتحصّل غلط. لازم تترد أو تتخصم من مستحق.</p>
+  
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 17 — 4</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">1,000.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 19 — 1</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">1,000.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 21 — 4</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">1,000.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 33 — 3</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">1,000.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 17 — 5</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">500.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 24 — 2</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">500.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 33 — 6</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">500.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 38 — 2</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">500.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 16 — 6</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">400.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 17 — 3</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">400.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 39 — 6</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">400.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="ico" aria-hidden="true">💳</span>
+      <span class="row-body">
+        <b>عمارة 46 — 4</b>
+        <span class="muted">المتبقي <bdi dir="ltr" class="num">400.00</bdi> <span class="cur">ج.م</span></span>
+      </span>
+    </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">📅 السنوات المالية</h3>
+  <p class="hint">قفل السنة بيمنع أي قيد جديد عليها. فتحها تاني محتاج شخص تاني وسبب مكتوب، وبيتسجّل.</p>
+  
+  <div class="row">
+    <span class="ico" aria-hidden="true">📂</span>
+    <span class="row-body">
+      <b>السنة المالية 2026</b>
+      <span class="muted"><bdi dir="ltr" class="num">1</bdi> يناير <bdi dir="ltr" class="num">2026</bdi> → <bdi dir="ltr" class="num">31</bdi> ديسمبر <bdi dir="ltr" class="num">2026</bdi></span>
+      <span class="chip mute">مفتوحة</span>
+      
+    </span>
+    <span class="row-end">
+      <form method="post" action="/admin/periods/DEMOFPR0000000000000000001/close" class="inline-form">
+             <button class="btn btn-2 btn-sm" type="submit">🔒 اقفل السنة</button>
+           </form>
+    </span>
   </div>
 </div>
 </main>
