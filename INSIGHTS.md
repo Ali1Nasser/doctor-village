@@ -1186,3 +1186,21 @@ happened to be correct and the stated reason was backwards, which is worse than 
 person moves it based on the explanation. It also meant nobody noticed the bubble was sitting on the
 inline-start EDGE where the wide layout's navigation rail lives, covering the last items of the menu.
 `getBoundingClientRect` on both elements answers this in one line.
+
+**[2026-08-08] [agent] A lookup table is only as complete as the data you have exercised.**
+`ACTION_AR` translates audit actions into Arabic, and it covered exactly the eighteen actions the
+demo seed fabricates. The other twenty-seven — `session.open`, `passkey.enroll`, `activation.issue`,
+every `map.*` and `settlement.*` — had no Arabic and printed as English slugs on «سجل التغييرات», the
+one screen whose entire purpose is being readable by a board of doctors. It surfaced on the deployed
+site, from real use, because production writes actions a seed never will. The durable fix is not the
+twenty-seven strings: it is `tests/access/audit.test.ts` scanning `lib/db/` SOURCE for every action
+written and failing on any without a translation — which immediately found three more my own greps
+had missed (`account.recover`, `settlement.post`, `settlement.reverse`). **When a map must cover a
+set the code defines, derive the set from the code, in a test.**
+
+**[2026-08-08] [ops] Deploy from the real environment before believing a screen is fixed.**
+Three defects only appeared against the live database: the untranslated audit actions, the fact that
+`albums.building_id` and `maintenance_tickets.unit_id` were unset in the DEPLOYED copy as well as in
+the seed, and `npm run deploy` being documented in `AGENTS.md` and absent from `package.json` — so
+the documented command had never once been run. A demo database that only ever holds seeded rows
+cannot show you what production data does to a screen.

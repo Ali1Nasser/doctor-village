@@ -16,6 +16,7 @@
     "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run test:access && npm run verify:ledger && npm run verify:demo && npm run drill:restore && npm run screens && npm run a11y",
     "screens": "npm run build && node .build/tests/fixtures/render_screens.js",
     "verify:d1": "bash tools/verify-d1.sh",
+    "deploy": "wrangler deploy",
     "gen:vapid": "node tools/gen-vapid.mjs",
     "drill:restore": "node tools/restore-drill.mjs",
     "backup": "node tools/backup.mjs",

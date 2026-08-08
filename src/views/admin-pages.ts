@@ -591,6 +591,42 @@ export const ACTION_AR: Record<string, string> = {
   'import.commit': 'نفّذ استيراد ملّاك',
   'post.publish': 'نشر خبر',
   'post.retract': 'سحب خبر',
+  // Everything below was writing itself into «سجل التغييرات» in English —
+  // `session.open`, `passkey.enroll`, `map.verify_feature` — on the one screen
+  // whose entire job is to be readable by a board of doctors. Twenty-four of
+  // the fifty-one actions `lib/db/` writes had no Arabic at all; the test in
+  // tests/access/audit.test.ts now fails if a new one is added without it.
+  'post.create': 'كتب خبر',
+  'post.update': 'عدّل خبر',
+  'post.unpin': 'شال تثبيت خبر',
+  'post.attach': 'ضاف مرفق لخبر',
+  'payment.approve': 'اعتمد إيصال',
+  'session.open': 'دخل البوابة',
+  'session.close': 'خرج من البوابة',
+  'passkey.enroll': 'سجّل جهاز جديد',
+  'passkey.revoke': 'سحب جهاز',
+  'activation.issue': 'طلع لينك تفعيل',
+  'expense.attach_invoice': 'رفع فاتورة لمصروف',
+  'expense.remove_invoice': 'شال فاتورة مصروف',
+  'expense.reverse_requested': 'طلب إلغاء مصروف',
+  'period.close': 'قفل فترة مالية',
+  'period.reopen': 'فتح فترة مالية تاني',
+  'album.create': 'عمل ألبوم',
+  'album.publish': 'نشر ألبوم',
+  'album.safety_check': 'راجع صور الألبوم',
+  'ticket.create': 'فتح بلاغ صيانة',
+  'ticket.status': 'غيّر حالة بلاغ',
+  'map.create_draft': 'عمل مسودة خريطة',
+  'map.add_feature': 'ضاف عمارة على الخريطة',
+  'map.verify_feature': 'أكّد موقع عمارة',
+  'map.reject_feature': 'رفض موقع عمارة',
+  'map.publish': 'نشر الخريطة',
+  'credit.request': 'طلب رد رصيد لمالك',
+  'credit.approve': 'وافق على رد رصيد',
+  'credit.post': 'رحّل رد رصيد',
+  'account.recover': 'استرجع حساب',
+  'settlement.post': 'رحّل تسوية',
+  'settlement.reverse': 'ألغى تسوية',
 };
 
 /** An action slug rendered in Arabic. Exported because the dashboard's activity

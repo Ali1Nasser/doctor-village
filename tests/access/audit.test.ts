@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { NodeSqliteDb } from '../../lib/db/driver.js';
 import { setTokenHasher, resolveAuthContext, newId } from '../../lib/db/index.js';
 import * as m from '../../lib/db/mutations.js';
+import * as av from '../../src/views/admin-pages.js';
 import type { AuthContext } from '../../types/domain.js';
 
 const ROOT = process.cwd();
@@ -426,5 +427,45 @@ describe('phone change — R-003, the most abuse-prone path', () => {
     const stillActive = raw.prepare(
       `SELECT status FROM phone_identifiers WHERE profile_id=? AND status='active'`).get(P_RES) as { status: string };
     assert.ok(stillActive, 'the resident was left with NO active number by a failed change');
+  });
+});
+
+/* ===================================================================== */
+/* The audit log has to be READABLE, not just complete                   */
+/* ===================================================================== */
+
+/**
+ * Every action `lib/db/` writes must have Arabic on «سجل التغييرات».
+ *
+ * Twenty-four of the fifty-one did not, so the transparency screen — the one
+ * whose entire purpose is to be read by a board of doctors — printed
+ * `session.open`, `passkey.enroll` and `map.verify_feature` in English. It went
+ * unnoticed because the demo seed only ever wrote the eighteen actions it
+ * fabricates; the rest appeared for the first time on the deployed site, from
+ * real use.
+ *
+ * This scans the SOURCE rather than the database, so an action added tomorrow
+ * fails here on the day it is written instead of on the day somebody performs
+ * it in production.
+ */
+describe('every audited action can be read in Arabic', () => {
+  it('ACTION_AR covers everything lib/db/ writes', () => {
+    const dbDir = join(process.cwd(), 'lib/db');
+    const actions = new Set<string>();
+    for (const f of readdirSync(dbDir).filter(f => f.endsWith('.ts'))) {
+      const src = readFileSync(join(dbDir, f), 'utf8');
+      // `mutate(db, ctx, { action: 'x.y', … })` — the one audited-write helper
+      for (const m of src.matchAll(/action:\s*'([a-z_]+\.[a-z_]+)'/g)) actions.add(m[1]!);
+      // …and the handful of places that write audit_log directly.
+      for (const m of src.matchAll(/INSERT INTO audit_log[\s\S]{0,400}?'([a-z_]+\.[a-z_]+)'/g)) {
+        actions.add(m[1]!);
+      }
+    }
+    assert.ok(actions.size > 30, `only found ${actions.size} actions — the scan is broken`);
+
+    const untranslated = [...actions].filter(a => !(a in av.ACTION_AR)).sort();
+    assert.deepEqual(untranslated, [],
+      `these audit actions render as English slugs on the transparency screen: ${
+        untranslated.join(', ')}`);
   });
 });
