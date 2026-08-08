@@ -21,6 +21,11 @@ const LOGIN_MSGS = {
   needsActivation: t.login.firstTime, noPasskey: t.login.errors.noPasskey,
   enroll: t.activate.enroll, confirm: t.app.confirm,
   cookiesBlocked: t.login.errors.cookiesBlocked,
+  noPlatformAuth: t.login.errors.noPlatformAuth,
+  alreadyEnrolled: t.login.errors.alreadyEnrolled,
+  timedOut: t.login.errors.timedOut,
+  rpMismatch: t.login.errors.rpMismatch,
+  diagnostic: t.login.errors.diagnostic,
 };
 const UPLOAD_MSGS = {
   compressing: t.pay.compressing, ready: t.app.confirm, tooBig: t.pay.errors.tooBig,
@@ -115,6 +120,17 @@ export function activatePage(name: string, recoveryCodes: string[]): string {
      and where do I log in NEXT time?" There was also no route OUT of here — if
      enrolment failed, the banner said «لازم تسجّل دخول الأول» and offered
      nothing to press, which leaves somebody holding a phone and a dead end. -->
+<!-- The answer for a phone that cannot hold a passkey at all. The six codes
+     are already printed above, and each one is a working login — so the
+     resident whose phone has no Samsung Pass or Google Password Manager is not
+     locked out of the portal, they just log in a slower way until they can set
+     one up. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🤔 ${esc(t.activate.noPasskeyFallback)}</h3>
+  <p class="muted">${esc(t.activate.noPasskeyFallbackBody)}</p>
+  <a class="btn btn-2" href="/login/recover">${esc(t.activate.useRecoveryCode)}</a>
+</div>
+
 <div class="card">
   <h3 style="margin-block-start:0">🔓 ${esc(t.activate.nextTimeTitle)}</h3>
   <p class="muted">${esc(t.activate.nextTimeBody)}</p>

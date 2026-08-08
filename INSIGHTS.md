@@ -1281,3 +1281,26 @@ response. One cookie arrived; the other did not; nothing errored. Found only by 
 response headers after deploying. Carrying them across needs `getSetCookie()` and `append()`
 explicitly. **Two runtimes, two behaviours, one passing test — a header-level assertion belongs
 against the real deployment, not only the test harness.**
+
+**[2026-08-08] [ops] ⭐ `window.PublicKeyCredential` existing does not mean the phone can MAKE a
+passkey.** The board narrowed it precisely: enrolment works on phones with Samsung Pass or Google
+Password Manager set up, and fails on phones without one. The API object is present in both — what
+differs is whether a *platform authenticator* exists to hold the key, which is what
+`PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()` answers and what the code never
+asked. So the button was offered, pressed, and failed with `NotAllowedError`, which the catch mapped
+to «مقدرناش نتأكد إنه إنت. جرّب تاني» — telling somebody their fingerprint was not recognised when
+their phone had never been able to try, and advising them to repeat the one thing that cannot work.
+**Feature-detect the capability, not the API.**
+
+**[2026-08-08] [ux] One apology for every failure hides the failures that need different actions.**
+The same catch answered: cancelled, timed out, already-enrolled, wrong RP id, and no-authenticator.
+Only the first two are worth retrying. Each now names its cause and appends the DOM error name, so
+the next unexplained report arrives with the one word that identifies it instead of another round of
+guessing.
+
+**[2026-08-08] [agent] Ask what distinguishes the machines that work from the ones that don't.**
+Two rounds went into cookies and WhatsApp crawlers because the report was "it fails on his phone".
+The sentence that solved it in one line was the board's own: *"في موبيلات البصمة فيها متسجلة على
+Samsung Pass أو Google Pass بتشتغل، وفي موبيلات تانية لأ."* A user comparing two populations has
+already done the bisection; the job is to ask for that comparison early, not to theorise from one
+failing case.

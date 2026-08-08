@@ -15,6 +15,33 @@
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
 
+### What changed in session 32 — ⭐ the phones that could not hold a passkey
+
+The board narrowed it themselves, in one sentence that solved what two rounds of my theorising had
+not: *"في موبيلات البصمة فيها متسجلة على Samsung Pass أو Google Pass بتشتغل، وفي موبيلات تانية لأ."*
+
+The script checked `window.PublicKeyCredential` and nothing else. That object exists on every modern
+browser; what differs between phones is whether a **platform authenticator** — Samsung Pass, Google
+Password Manager, a screen lock — exists to hold the key. That question has an API of its own,
+`isUserVerifyingPlatformAuthenticatorAvailable()`, and the code never asked it. So the button was
+offered, pressed, and failed with `NotAllowedError`, which the catch turned into «مقدرناش نتأكد إنه
+إنت. جرّب تاني» — telling a resident their fingerprint was not recognised when their phone had never
+been able to try, and advising the one action that cannot possibly work.
+
+Fixed: the capability is detected before the button is offered; when it is absent the page says what
+to do and **disables** the button rather than leaving a control that swallows presses; every WebAuthn
+error name now has its own sentence with the DOM error name appended for reporting; and a phone that
+genuinely cannot hold a passkey is pointed at the six recovery codes already printed on that page,
+each of which is a working single-use login.
+
+Reproduced both populations in Chromium — with a virtual authenticator (enrols, reaches
+`/activate/done`) and without one (names the cause, disables the button, offers the codes).
+
+**The lesson worth carrying:** a user who tells you which machines work and which do not has already
+done the bisection. Ask for that comparison first.
+
+---
+
 ### What changed in session 31 — ⭐ the activation link that WhatsApp ate
 
 The board's report was exact and is the whole diagnosis: *"لما بعمل لينك تفعيل وبعمل open بيشتغل،

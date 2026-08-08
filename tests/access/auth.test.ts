@@ -271,6 +271,39 @@ describe('challenges and activation links are single-use', () => {
     assert.match(probe, /Max-Age=600/, 'the probe should not outlive the enrolment it guards');
   });
 
+  /**
+   * ⭐ The board's observation: passkeys enrol on phones with Samsung Pass or
+   * Google Password Manager set up, and fail on phones without one.
+   *
+   * That is not a sensor misreading a finger — it is a phone with nowhere to
+   * keep the key — and the page used to answer both with «مقدرناش نتأكد إنه
+   * إنت. جرّب تاني», which is advice that cannot work. The script now asks the
+   * browser whether a platform authenticator exists BEFORE offering the button,
+   * names each failure by its cause, and prints the error name for anyone who
+   * has to report it.
+   */
+  it('⭐ the activation page detects a phone that cannot hold a passkey', async () => {
+    const token = passkey.randomToken();
+    await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(token),
+      'first_activation', NOW);
+    const html = await (await activate(token)).text();
+
+    assert.match(html, /isUserVerifyingPlatformAuthenticatorAvailable/,
+      'the page offers the button without asking whether the phone can do it');
+
+    // Each cause gets its own sentence, and none of them is the generic one.
+    for (const k of ['InvalidStateError', 'NotSupportedError', 'SecurityError',
+                     'AbortError', 'NotAllowedError']) {
+      assert.ok(html.includes(k), `${k} is not distinguished from a generic failure`);
+    }
+    assert.match(html, /لسه مش مظبوط عليه حفظ البصمات/, 'no message names the real cause');
+
+    // …and a phone that genuinely cannot is not left stranded: the recovery
+    // codes printed on this same page are a working login.
+    assert.match(html, /href="\/login\/recover"/,
+      'a phone with no passkey support has no way into the portal at all');
+  });
+
   it('issuing a new link invalidates the previous one', async () => {
     const a = passkey.randomToken(), b = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(a), 'recovery', NOW);

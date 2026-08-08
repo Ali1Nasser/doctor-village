@@ -480,7 +480,7 @@ header .htext{flex:1;min-inline-size:0}
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
 </style>
-<script>const MSG={"working":"ثانية واحدة…","failed":"مقدرناش نتأكد إنه إنت. جرّب تاني، ولو فضل كلّم الإدارة.","cancelled":"مقدرناش نتأكد إنه إنت. جرّب تاني، ولو فضل كلّم الإدارة.","submit":"الدخول ببصمة أو قفل الموبايل","needsActivation":"أول مرة تدخل؟ كلّم الإدارة يبعتولك لينك التفعيل.","noPasskey":"موبايلك مش بيدعم البصمة. كلّم الإدارة يبعتولك لينك دخول.","enroll":"سجّل بصمتي دلوقتي","confirm":"تأكيد","cookiesBlocked":"المتصفح ده مش بيحفظ الكوكيز، وعشان كده مش عارفين نكمّل التفعيل. افتح اللينك في كروم أو سفاري بدل المتصفح اللي جوه الواتساب — اضغط على النقط الثلاثة فوق واختار «فتح في المتصفح»."};</script>
+<script>const MSG={"working":"ثانية واحدة…","failed":"مقدرناش نتأكد إنه إنت. جرّب تاني، ولو فضل كلّم الإدارة.","cancelled":"مقدرناش نتأكد إنه إنت. جرّب تاني، ولو فضل كلّم الإدارة.","submit":"الدخول ببصمة أو قفل الموبايل","needsActivation":"أول مرة تدخل؟ كلّم الإدارة يبعتولك لينك التفعيل.","noPasskey":"موبايلك مش بيدعم البصمة. كلّم الإدارة يبعتولك لينك دخول.","enroll":"سجّل بصمتي دلوقتي","confirm":"تأكيد","cookiesBlocked":"المتصفح ده مش بيحفظ الكوكيز، وعشان كده مش عارفين نكمّل التفعيل. افتح اللينك في كروم أو سفاري بدل المتصفح اللي جوه الواتساب — اضغط على النقط الثلاثة فوق واختار «فتح في المتصفح».","noPlatformAuth":"الموبايل ده لسه مش مظبوط عليه حفظ البصمات للمواقع. جرّب واحدة من دول: حط قفل أو بصمة على الموبايل من الإعدادات، أو افتح اللينك في كروم بدل المتصفح اللي جوه الواتساب.","alreadyEnrolled":"الموبايل ده مسجّل عندنا خلاص. روح لصفحة الدخول واضغط «الدخول ببصمة».","timedOut":"الوقت خلص قبل ما تحطّ صباعك. اضغط الزرار تاني وحطّ صباعك على الحساس.","rpMismatch":"فيه مشكلة في إعدادات الموقع نفسه — كلّم الإدارة وقول لهم رقم الخطأ اللي تحت.","diagnostic":"لو كلّمت الإدارة قول لهم الكود ده: {code}"};</script>
 </head>
 <body>
 <a class="skip" href="#main">تخطّي للمحتوى</a>
@@ -554,6 +554,21 @@ const say = (el, text, kind) => {
   box.hidden = false;
 };
 
+
+function why(err) {
+  var n = (err && err.name) || '';
+  if (n === 'InvalidStateError') return MSG.alreadyEnrolled;
+  if (n === 'NotSupportedError' || n === 'NotReadableError') return MSG.noPlatformAuth;
+  if (n === 'SecurityError') return MSG.rpMismatch;
+  if (n === 'AbortError' || n === 'TimeoutError') return MSG.timedOut;
+  if (n === 'NotAllowedError') return MSG.cancelled;
+  return (err && err.message) || MSG.failed;
+}
+function fail(err) {
+  var extra = err && err.name ? ' — ' + MSG.diagnostic.replace('{code}', err.name) : '';
+  say(null, why(err) + extra);
+}
+
 (function () {
   const form = document.getElementById('login-form');
   if (!form || !window.PublicKeyCredential) return;   // no passkeys: server flow stands
@@ -593,9 +608,10 @@ const say = (el, text, kind) => {
       if (!v.ok) throw new Error(out.error || MSG.failed);
       location.href = '/';
     } catch (err) {
-      // NotAllowedError = the person cancelled or the sensor timed out. That is
-      // not an error to apologise for; it is a normal thing to do by accident.
-      say(null, err.name === 'NotAllowedError' ? MSG.cancelled : (err.message || MSG.failed));
+      // Named causes, not one apology for all of them: cancelling is normal and
+      // "this phone has nowhere to keep a passkey" is not something trying
+      // again will fix.
+      fail(err);
     } finally {
       btn.disabled = false; btn.textContent = MSG.submit;
     }

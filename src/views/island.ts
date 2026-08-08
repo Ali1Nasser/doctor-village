@@ -30,8 +30,39 @@ const say = (el, text, kind) => {
 };
 `;
 
+/**
+ * Turn a WebAuthn failure into a sentence that names the CAUSE.
+ *
+ * Every one of these used to arrive as «مقدرناش نتأكد إنه إنت. جرّب تاني» —
+ * including the cases where trying again cannot possibly work. The board's
+ * report is what made the distinction visible: passkeys enrol fine on phones
+ * with Samsung Pass or Google Password Manager set up, and fail on phones
+ * without one. That is not "the sensor did not read your finger", it is "there
+ * is nowhere on this phone to keep the key", and it needs different words.
+ *
+ * The error NAME is appended for anyone who has to report it, because the next
+ * unexplained case should not need another round of guessing.
+ */
+const WHY = `
+function why(err) {
+  var n = (err && err.name) || '';
+  if (n === 'InvalidStateError') return MSG.alreadyEnrolled;
+  if (n === 'NotSupportedError' || n === 'NotReadableError') return MSG.noPlatformAuth;
+  if (n === 'SecurityError') return MSG.rpMismatch;
+  if (n === 'AbortError' || n === 'TimeoutError') return MSG.timedOut;
+  if (n === 'NotAllowedError') return MSG.cancelled;
+  return (err && err.message) || MSG.failed;
+}
+function fail(err) {
+  var extra = err && err.name ? ' — ' + MSG.diagnostic.replace('{code}', err.name) : '';
+  say(null, why(err) + extra);
+}
+`;
+
+
 export const PASSKEY_LOGIN_JS = `<script>
 ${HELPERS}
+${WHY}
 (function () {
   const form = document.getElementById('login-form');
   if (!form || !window.PublicKeyCredential) return;   // no passkeys: server flow stands
@@ -71,9 +102,10 @@ ${HELPERS}
       if (!v.ok) throw new Error(out.error || MSG.failed);
       location.href = '/';
     } catch (err) {
-      // NotAllowedError = the person cancelled or the sensor timed out. That is
-      // not an error to apologise for; it is a normal thing to do by accident.
-      say(null, err.name === 'NotAllowedError' ? MSG.cancelled : (err.message || MSG.failed));
+      // Named causes, not one apology for all of them: cancelling is normal and
+      // "this phone has nowhere to keep a passkey" is not something trying
+      // again will fix.
+      fail(err);
     } finally {
       btn.disabled = false; btn.textContent = MSG.submit;
     }
@@ -83,10 +115,29 @@ ${HELPERS}
 
 export const PASSKEY_ENROLL_JS = `<script>
 ${HELPERS}
-(function () {
+${WHY}
+(async function () {
   const btn = document.getElementById('enroll-btn');
   if (!btn) return;
   if (!window.PublicKeyCredential) { say(null, MSG.noPasskey, 'warn'); btn.disabled = true; return; }
+
+  // ⭐ Existence of PublicKeyCredential says the API is present. It does NOT say
+  // the phone has anywhere to PUT a passkey — that needs a platform
+  // authenticator, which is what Samsung Pass and Google Password Manager
+  // provide and what a phone with no screen lock does not have. Without this
+  // check the button is offered, pressed, and fails with NotAllowedError, which
+  // reads as "we could not verify it is you" to somebody whose phone was never
+  // able to try.
+  try {
+    if (PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+      const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      // Disabled, not merely unwired: the listener below is never attached in
+      // this branch, so leaving the button live gives a control that swallows
+      // presses silently — worse than one that is visibly unavailable.
+      if (!ok) { say(null, MSG.noPlatformAuth, 'warn'); btn.disabled = true; return; }
+    }
+  } catch (e) { /* an older browser that cannot answer still gets to try */ }
+
   btn.addEventListener('click', async () => {
     btn.disabled = true; btn.textContent = MSG.working;
     try {
@@ -125,7 +176,7 @@ ${HELPERS}
       if (!v.ok) throw new Error(out.error || MSG.failed);
       location.href = '/activate/done';
     } catch (err) {
-      say(null, err.name === 'NotAllowedError' ? MSG.cancelled : (err.message || MSG.failed));
+      fail(err);
       btn.disabled = false; btn.textContent = MSG.enroll;
     }
   });
