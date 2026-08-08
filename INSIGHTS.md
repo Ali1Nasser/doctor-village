@@ -1332,3 +1332,19 @@ reached the thing they claimed to assert, and "a resident cannot print somebody 
 green because the request never ran at all. The tell was a third test failing with a code that was
 provably valid. **When an assertion about scoping passes, check that the request it makes SUCCEEDS
 for the allowed case** — a 401 satisfies "nothing changed" just as well as a working guard does.
+
+**[2026-08-08] [ops] ⭐⭐ Cloudflare Workers refuses PBKDF2 above 100,000 iterations. Node does
+not.** Written at 210,000, green across every test in Node, and a **500 on the first real request
+against the deployed Worker**: `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are
+not supported (requested 210000)`. This is the same shape as the dropped `set-cookie` two days ago
+and the third time this project has shipped something that passed in Node and failed in Workers.
+**The test harness is a different cryptographic and HTTP implementation from production.** Anything
+touching WebCrypto, headers, or streams needs one live request before it is called done — and the
+constant that broke it now has a test asserting the *platform ceiling*, so the next person to reach
+for a bigger number gets a red build instead of a board member who cannot log in.
+
+**[2026-08-08] [agent] The live probe is what found it, and the probe was nearly skipped.** Every
+in-process test passed; the migration applied; the pages rendered; a wrong-password request returned
+the right 401 — because that path returns before it ever hashes anything. Only issuing a real
+password on the real Worker executed PBKDF2 in production. **A verification that never exercises the
+expensive path is not a verification of the expensive path.**

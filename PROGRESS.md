@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~713 checks green** (107 unit · 460 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ⚠️ **The DEPLOYED Worker is several sessions behind this branch** (R-098) — judge the product from `preview/demo.html` or `npm run dev`, not from the live URL, until it is redeployed. |
+| **Status** | 🟢 **~716 checks green** (107 unit · 463 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
 | **Last updated** | 2026-08-08 (session 33) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
@@ -52,6 +52,16 @@ was not harder — it was shut. Everything built is arranged to keep the passwor
 misbehave — it aborted the whole login request, so *every* password login returned the refusal and
 the rate limiter counted nothing. The schema refusing an unknown value is the control working;
 migration `0026` rebuilds the table with the value added.
+
+**The bug only a live request could find:** PBKDF2 was set to 210,000 iterations, which is
+OWASP-shaped, and green in every test. Cloudflare Workers **refuses any count above 100,000** —
+`NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not supported` — and Node's
+WebCrypto has no such cap, so the first real request against the deployed Worker returned a 500.
+Set to the ceiling with the reasoning written at the constant, plus a test asserting the *platform*
+limit so the next bump fails the build. This is the third time this project has shipped something
+that passed in Node and failed in Workers (R-115). Verified end-to-end on the live site afterwards:
+board issues → resident logs in → lands on `/me` → changes it to an Arabic passphrase → old one
+refused → prints six codes → redeems one with JavaScript off. Cleaned up (R-116).
 
 **The lesson:** a mechanism that forces a test per mutation earns its keep at the moment you add
 one. `MUTATING_FUNCTIONS` failed the build the instant `reissueOwnRecoveryCodes` was written without
@@ -1825,7 +1835,7 @@ equation is a tautology and is demoted).
 ("Learned during the build") → `RISKS.md` (R-028 onward).
 
 **One command tells you if it still works:** `npm run verify` →
-**~713 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
+**~716 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
 access/audit/auth/onboarding/transparency/views + 48 ledger invariants + 34 demo checks + 12
 restore-drill checks + **41 screens rendered** + an axe-core WCAG 2.2 AA pass over all of them.
 If it is green, the security and money layers are intact. **It has never run in CI — there is

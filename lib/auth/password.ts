@@ -15,11 +15,46 @@
  */
 
 /**
- * OWASP's 2023 floor for PBKDF2-HMAC-SHA256. Stored per row rather than read
- * from here at verify time, so raising it later re-costs new passwords without
- * locking out everyone whose hash was written at the old number.
+ * ⛔ **100,000 is a CEILING imposed by the runtime, not a number we chose.**
+ *
+ * The Workers implementation of WebCrypto refuses anything higher, by name:
+ *
+ *     NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
+ *     supported (requested 210000).
+ *
+ * This was written at 210,000 first, passed every test in Node — whose
+ * `crypto.subtle` has no such cap — and returned a 500 on the first real
+ * request against the deployed Worker. **Do not raise it back.** A test below
+ * asserts the ceiling so the next person to reach for a bigger number finds out
+ * from a red build instead of from a board member who cannot log in.
+ *
+ * OWASP's 2023 guidance for PBKDF2-HMAC-SHA256 is 600,000, so this is six times
+ * short of it and that is worth stating plainly rather than burying. What makes
+ * it acceptable *here*, and would not make it acceptable for a primary
+ * credential:
+ *
+ *   · the password is the SECOND way in, behind a passkey, and does not exist
+ *     at all until an admin issues one;
+ *   · the one the board hands out is generated, not chosen — ~57 bits from a
+ *     27-character alphabet, which no offline attack reaches regardless of the
+ *     iteration count;
+ *   · online guessing is capped at five attempts per fifteen minutes, per IP
+ *     **and** per number;
+ *   · every issue, change and clear is on the audit trail.
+ *
+ * The residual risk is an offline attack on a stolen database against a
+ * password the RESIDENT chose, which is the case `checkPasswordStrength`
+ * exists to keep out of the "eight characters, all lowercase" range. Recorded
+ * as R-115.
+ *
+ * Stored per row rather than read from here at verify time, so if the platform
+ * ever lifts the cap, raising this re-costs new passwords without invalidating
+ * hashes written at the old number.
  */
-export const PBKDF2_ITERATIONS = 210_000;
+export const PBKDF2_ITERATIONS = 100_000;
+
+/** What the Workers runtime refuses to exceed. See the note above. */
+export const PBKDF2_RUNTIME_MAX = 100_000;
 
 const enc = new TextEncoder();
 

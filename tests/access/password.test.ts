@@ -396,9 +396,26 @@ test('the hash is PBKDF2 with a per-user salt and a stored cost', async () => {
   const b = await pw.hashPassword('نفس الكلمة');
   assert.notEqual(a.salt, b.salt, 'a shared salt makes one table work for the whole village');
   assert.notEqual(a.hash, b.hash);
-  assert.ok(a.iterations >= 210_000, 'below the OWASP floor for PBKDF2-HMAC-SHA256');
+  assert.equal(a.iterations, pw.PBKDF2_ITERATIONS);
   assert.ok(await pw.verifyPassword('نفس الكلمة', a));
   assert.ok(!await pw.verifyPassword('كلمة تانية', a));
   // The cost travels with the row, so raising it later does not lock anyone out.
   assert.ok(await pw.verifyPassword('نفس الكلمة', { ...a, iterations: a.iterations }));
+});
+
+test('the iteration count stays under the ceiling the Workers runtime enforces', () => {
+  // This was 210,000 — OWASP-shaped, green in Node, and a 500 on the first real
+  // request against the deployed Worker:
+  //   NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
+  //   supported (requested 210000).
+  // Node's WebCrypto has no such cap, so no test that only runs here can catch
+  // it. This one encodes the platform fact instead of the platform behaviour,
+  // so the next person to reach for a bigger number gets a red build rather
+  // than a board member who cannot log in.
+  assert.ok(pw.PBKDF2_ITERATIONS <= pw.PBKDF2_RUNTIME_MAX,
+    `Cloudflare Workers refuses more than ${pw.PBKDF2_RUNTIME_MAX} PBKDF2 iterations`);
+  // …and the schema's floor still holds, so the two constraints have not
+  // crossed and left no legal value.
+  assert.ok(pw.PBKDF2_ITERATIONS >= 100_000,
+    'migrations/0026 has CHECK (iterations >= 100000) — a lower number cannot be stored');
 });
