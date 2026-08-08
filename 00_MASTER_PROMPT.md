@@ -36,6 +36,9 @@ The portal replaces an unmanaged WhatsApp group as the system of record for:
    post to both the resident's ledger and the community totals.
 3. Community information — news, announcements, board decisions, maintenance photo albums,
    documents, and meeting minutes (محاضر الاجتماعات), permanently searchable.
+4. Village navigation — a responsive, accessible village plan whose verified building areas link
+   to the authoritative building record. *(Restored 2026-08-08 with C13; it was missing from the
+   spec copy this project was built from.)*
 
 **The organizing principle is radical financial transparency.** Every user, including an ordinary
 resident, can see total income, total expenses, the current treasury balance, the full expense
@@ -158,6 +161,20 @@ C12. **Zero-cost authentication, layered.** Passkeys carry the daily load; the f
        domain still works**. Put this in the exit plan before enrolling the first resident.
      - A device with no passkey support falls back to the inbound-WhatsApp flow. Never introduce a
        shared or guessable PIN as a fallback.
+
+C13. **The village map is a navigation layer, never a data source.** The supplied image is a cropped,
+     partial reference; labels in the visible portion appear within `14–46`, but neither that range,
+     the total building count, unit counts, nor exact boundaries are authoritative until the board
+     verifies them. Never seed production `buildings`/`units` from pixels or labels. Every published
+     hotspot links to an existing `buildings.id`, is board-verified, and exposes only permitted
+     aggregate/public information. Provide an accessible building list equal to the visual overlay.
+     Use only versioned first-party static assets — no external map SDK, tiles, API key, or runtime
+     third-party request. `07_VILLAGE_MAP_SPEC.md` is authoritative.
+
+     ⚠️ RESTORED 2026-08-08. This constraint, product goal 4 below, and
+     `07_VILLAGE_MAP_SPEC.md` are in the v1.4 spec pack and were absent from the copy this
+     project was built from — twenty-seven sessions against a truncated specification, found by
+     diffing the uploaded packs. See INSIGHTS 2026-08-08.
 </non_negotiable_constraints>
 
 <tech_stack>

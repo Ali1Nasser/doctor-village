@@ -481,9 +481,14 @@ export interface ReviewItem {
   referenceNo?: string | null; noteAr?: string | null;
 }
 
-export function reviewPage(items: ReviewItem[], singleAdmin: boolean, demo?: boolean): string {
+export function reviewPage(
+  items: ReviewItem[], singleAdmin: boolean, demo?: boolean,
+  flash?: string, error?: string,
+): string {
   return page({ title: t.admin.queueTitle, showNav: false, demo }, `
 ${singleAdmin ? `<div class="banner warn">${esc(t.admin.singleAdminWarning)}</div>` : ''}
+${error ? `<div class="banner warn">${esc(error)}</div>` : ''}
+${flash ? `<div class="banner ok">${esc(flash)}</div>` : ''}
 <h2>${esc(t.admin.queueTitle)}</h2>
 ${items.length === 0
   ? emptyState('✅', t.admin.queueEmpty)
@@ -499,6 +504,13 @@ ${items.map(p => `
   <form method="post" action="/admin/review/${esc(p.id)}">
     <button class="btn" name="kind" value="approve">${esc(t.admin.approve)}</button>
     <div class="field" style="margin-block-start:12px">
+      <label for="a-${esc(p.id)}">${esc(t.admin.amountLabel)}</label>
+      <input id="a-${esc(p.id)}" name="amount" inputmode="decimal" autocomplete="off"
+             placeholder="${esc((p.amountPiastres / 100).toFixed(2))}"
+             aria-describedby="ah-${esc(p.id)}">
+      <p class="hint" id="ah-${esc(p.id)}">${esc(t.admin.amountHint)}</p>
+    </div>
+    <div class="field">
       <label for="r-${esc(p.id)}">${esc(t.admin.reasonRequired)}</label>
       <textarea id="r-${esc(p.id)}" name="reason" rows="2"
         placeholder="${esc(t.admin.reasonPlaceholder)}"></textarea>

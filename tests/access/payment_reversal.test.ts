@@ -103,7 +103,6 @@ before(async () => {
        credit_piastres,unit_id) VALUES (?,?,2,?,?,0,600000,?)`, id('JL', 2), JE, I_SUBS, OPF, U1);
   x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,
        credit_piastres,unit_id) VALUES (?,?,3,?,?,0,200000,?)`, id('JL', 3), JE, L_CREDIT, OPF, U1);
-  x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-04-06T10:00:00Z' WHERE id=?`, A1, JE);
 
   x(`INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,fee_period_id,
        claimed_amount_piastres,method,transfer_date,storage_key,image_sha256,status)
@@ -115,6 +114,10 @@ before(async () => {
   x(`UPDATE payments SET status='approved', approved_amount_piastres=800000,
        journal_entry_id=?, reviewed_by=?, reviewed_at='2026-04-06T09:00:00Z' WHERE id=?`,
     JE, A2, PAY);
+  // Attach the receipt BEFORE posting — migration 0024's orphan-entry guard
+  // checks at posting time that the receipt points back at this entry.
+    x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-04-06T10:00:00Z' WHERE id=?`, A1, JE);
+
 
   db = new NodeSqliteDb(raw as never);
   const storage = new D1BlobStorage(db);
@@ -321,7 +324,6 @@ describe('the reversal screen — a control nobody can reach does not exist', ()
          credit_piastres,unit_id) VALUES (?,?,1,?,?,600000,0,?)`, id('JL', 20), JE2, A_BANK, OPF, U1);
     x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,
          credit_piastres,unit_id) VALUES (?,?,2,?,?,0,600000,?)`, id('JL', 21), JE2, I_SUBS, OPF, U1);
-    x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-05-06T10:00:00Z' WHERE id=?`, A2, JE2);
     x(`INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,fee_period_id,
          claimed_amount_piastres,method,transfer_date,storage_key,image_sha256,status)
        VALUES (?,'R-2026-00005',?,?,?,?,600000,'instapay','2026-05-05',?,?, 'draft')`,
@@ -332,6 +334,8 @@ describe('the reversal screen — a control nobody can reach does not exist', ()
     x(`UPDATE payments SET status='approved', approved_amount_piastres=600000,
          journal_entry_id=?, reviewed_by=?, reviewed_at='2026-05-06T09:00:00Z' WHERE id=?`,
       JE2, A1, P2);
+    // Attach first, post second — see the note in the fixture above.
+    x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-05-06T10:00:00Z' WHERE id=?`, A2, JE2);
   });
 
   const get = (path: string, tok: string) =>

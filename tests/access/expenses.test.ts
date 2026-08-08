@@ -44,6 +44,7 @@ const id = (p: string, n: number) => (p + String(n).padStart(26 - p.length, '0')
 
 const A1 = id('PRF', 1), A2 = id('PRF', 2), OP = id('PRF', 3);
 const BLD = id('BLD', 1), U1 = id('UNT', 1), PERIOD = id('FIS', 1) as Id;
+const DEP_PAY = id('PAY', 1);
 const A_BANK = 'ACC00000000000000000001102' as Id;
 const I_SUBS = 'ACC00000000000000000004101' as Id;
 const RP = { id: 'localhost', name: 'قرية الأطباء', origin: 'http://localhost' };
@@ -110,8 +111,30 @@ before(async () => {
   };
   post('رصيد أول المدة', '2026-01-01', 'opening_balance', null, [
     [A_BANK, OP_FUND, 2_000_000, 0], ['ACC00000000000000000003101', OP_FUND, 0, 2_000_000]]);
-  post('وديعة شقة 101', '2026-02-01', 'payment', id('PAY', 1), [
-    [A_BANK, DEP_FUND, 500_000, 0], ['ACC00000000000000000002101', DEP_FUND, 0, 500_000]]);
+  // The deposit entry needs a REAL receipt behind it. Migration 0024's
+  // orphan-entry guard refuses a posting that claims a payment which does not
+  // exist or is not linked back — and this fixture had been claiming exactly
+  // that, so the books here carried 5,000 ج.م of trust money attributed to a
+  // receipt nobody ever uploaded. The steps below are the order the app uses:
+  // entry and lines first, then the receipt, then post.
+  const depEntry = id('JE', 601);
+  x(`INSERT INTO journal_entries (id,entry_no,entry_date,period_id,description_ar,
+       source_type,source_id,created_by) VALUES (?,?,?,?,?,?,?,?)`,
+    depEntry, 'J-2026-90099', '2026-02-01', PERIOD, 'وديعة شقة 101', 'payment', DEP_PAY, A2);
+  x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,
+       debit_piastres,credit_piastres) VALUES (?,?,?,?,?,?,?)`,
+    id('JL', 601), depEntry, 1, A_BANK, DEP_FUND, 500_000, 0);
+  x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,
+       debit_piastres,credit_piastres) VALUES (?,?,?,?,?,?,?)`,
+    id('JL', 602), depEntry, 2, 'ACC00000000000000000002101', DEP_FUND, 0, 500_000);
+  x(`INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,
+       claimed_amount_piastres,approved_amount_piastres,reviewed_by,reviewed_at,
+       method,transfer_date,storage_key,status,journal_entry_id)
+     VALUES (?,?,?,?,?,?,?,?,?,'bank_transfer','2026-02-01',?,'approved',?)`,
+    DEP_PAY, 'R-2026-DEP01', U1, A1, C_DEPOSIT, 500_000, 500_000, A2,
+    '2026-02-01T10:00:00Z', 'receipts/dep.webp', depEntry);
+  x(`UPDATE journal_entries SET approved_by=?, posted_at=? WHERE id=?`,
+    A1, '2026-02-01T10:00:00Z', depEntry);
 
   db = new NodeSqliteDb(raw as never);
   const storage = new D1BlobStorage(db);

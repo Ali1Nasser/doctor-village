@@ -209,6 +209,8 @@ before(async () => {
   const fund = raw.prepare(`SELECT id FROM funds WHERE kind='operating'`).get() as { id: string };
   const dep = raw.prepare(`SELECT id FROM funds WHERE kind='deposit'`).get() as { id: string } | undefined;
   let en = 0, ln = 0;
+  /** Posting steps held back until their receipt is attached. */
+  const deferred: Array<() => void> = [];
   const post = (desc: string, date: string, src: string, srcId: string | null,
                 rows: Array<[string, string, number, number]>) => {
     en += 1; const eid = id('JE', en);
@@ -222,8 +224,14 @@ before(async () => {
         id('JL', ln), eid, i + 1, acct, fnd, dr, cr,
         src === 'payment' ? (srcId === P_SUB ? U102 : U101) : null);
     });
-    x(`UPDATE journal_entries SET approved_by=?, posted_at=? WHERE id=?`,
+    // A payment's entry is posted only AFTER its receipt is attached (below).
+    // Migration 0024's orphan-entry guard checks, at the moment of posting,
+    // that the receipt this entry names points back at it — so "post, then
+    // attach" is a state the database refuses, and the fixture used to write
+    // exactly that.
+    const postSql = () => x(`UPDATE journal_entries SET approved_by=?, posted_at=? WHERE id=?`,
       ADMIN, `${date}T10:00:00Z`, eid);
+    if (src === 'payment' || src === 'expense') deferred.push(postSql); else postSql();
     return eid;
   };
   const OP = fund.id, DP = dep?.id ?? fund.id;
@@ -238,10 +246,28 @@ before(async () => {
   // `spendable` is overstated by exactly 500,000 and a test below says so.
   const E_DEP = post('وديعة شقة 101', '2026-05-01', 'payment', P_DEP, [
     [A_BANK, DP, 500_000, 0], [L_DEPOSIT, DP, 0, 500_000]]);
-  post('صيانة المصعد', '2026-06-01', 'expense', id('EXP', 1), [
+  // ⭐ These two entries used to name expense documents that did not exist:
+  // 450,000 ج.م of spending in the books with no voucher behind it. Migration
+  // 0024's guard refuses that now, and the fixture writes the vouchers — which
+  // is what the screens under test are supposed to be reporting on.
+  const cMaint = (raw.prepare(
+    `SELECT id FROM categories WHERE direction='expense' LIMIT 1`).get() as { id: string }).id;
+  const expense = (n: number, amount: number, date: string, desc: string) => {
+    const eid = id('EXP', n);
+    x(`INSERT INTO expenses (id,voucher_no,category_id,amount_piastres,spent_on,
+         description_ar,fund_id,status,recorded_by)
+       VALUES (?,?,?,?,?,?,?, 'recorded', ?)`,
+      eid, `E-2026-0000${n}`, cMaint, amount, date, desc, OP, TREAS);
+    return eid;
+  };
+  const X_LIFT = expense(1, 300_000, '2026-06-01', 'صيانة المصعد');
+  const X_PAY  = expense(2, 150_000, '2026-06-30', 'مرتبات يونيو');
+  const E_LIFT = post('صيانة المصعد', '2026-06-01', 'expense', X_LIFT, [
     [E_MAINT, OP, 300_000, 0], [A_BANK, OP, 0, 300_000]]);
-  post('مرتبات يونيو', '2026-06-30', 'expense', id('EXP', 2), [
+  const E_PAY = post('مرتبات يونيو', '2026-06-30', 'expense', X_PAY, [
     [E_SALARY, OP, 150_000, 0], [A_CASH, OP, 0, 150_000]]);
+  x(`UPDATE expenses SET status='posted', journal_entry_id=? WHERE id=?`, E_LIFT, X_LIFT);
+  x(`UPDATE expenses SET status='posted', journal_entry_id=? WHERE id=?`, E_PAY, X_PAY);
 
   /* Approval comes LAST, and carries the journal entry with it.
    *
@@ -259,6 +285,8 @@ before(async () => {
   };
   approve(P_SUB, 800_000, E_SUB);
   approve(P_DEP, 500_000, E_DEP);
+  // ...and only now do those two entries become part of the books.
+  for (const run of deferred) run();
 
   x(`UPDATE settings SET unit_status_public = 1 WHERE id = 1`);
 
@@ -533,6 +561,24 @@ describe('the deposit fund is watched, and says so out loud', () => {
     const x = (q: string, ...p: unknown[]) => raw.prepare(q).run(...p as never[]);
     const DP = (raw.prepare(`SELECT id FROM funds WHERE kind='deposit'`).get() as { id: string }).id;
     const eid = id('JE', 80);
+    // The voucher is real, because the alarm being tested is about WHICH FUND
+    // the money left — not about a missing document. Migration 0024's guard
+    // covers the second failure; this test is about the first, so it has to
+    // stop tripping over it.
+    const cX = (raw.prepare(
+      `SELECT id FROM categories WHERE direction='expense' LIMIT 1`).get() as { id: string }).id;
+    x(`INSERT INTO expenses (id,voucher_no,category_id,amount_piastres,spent_on,
+         description_ar,fund_id,status,recorded_by)
+       VALUES (?,'E-2026-00009',?,100000,'2026-07-01','مرتبات من فلوس الودائع',?, 'recorded', ?)`,
+      id('EXP', 9), cX,
+      // The VOUCHER says operating — `trg_expense_fund_spendable` refuses a
+      // trust fund on an expense, and that control works. The fraud being
+      // simulated is one layer down: the journal LINES draw on the deposit
+      // fund anyway. That mismatch is exactly what the alarm on /finance is
+      // for, and it is why the alarm cannot be replaced by the expense-side
+      // trigger alone.
+      (raw.prepare(`SELECT id FROM funds WHERE kind='operating'`).get() as { id: string }).id,
+      TREAS);
     x(`INSERT INTO journal_entries (id,entry_no,entry_date,period_id,description_ar,
          source_type,source_id,created_by) VALUES (?,'J-80','2026-07-01',?,'مرتبات من فلوس الودائع',
          'expense',?,?)`, eid, PERIOD, id('EXP', 9), TREAS);
@@ -540,6 +586,7 @@ describe('the deposit fund is watched, and says so out loud', () => {
        VALUES (?,?,1,?,?,100000,0)`, id('JL', 80), eid, E_SALARY, DP);
     x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,credit_piastres)
        VALUES (?,?,2,?,?,0,100000)`, id('JL', 81), eid, A_BANK, DP);
+    x(`UPDATE expenses SET status='posted', journal_entry_id=? WHERE id=?`, eid, id('EXP', 9));
     x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-07-01T10:00:00Z' WHERE id=?`, ADMIN, eid);
 
     const r = await app.request('/finance', { headers: { authorization: 'Bearer tok-admin' } });

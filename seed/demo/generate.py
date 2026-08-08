@@ -197,10 +197,19 @@ M("-- ------------------------------------------------- opening balance ---")
 entry_n = 0
 line_n = 0
 
-def post_entry(dst, desc, source_type, source_id, rows, date, creator=TREASURER, approver=CHAIR):
+def post_entry(dst, desc, source_type, source_id, rows, date, creator=TREASURER,
+               approver=CHAIR, defer_post=False):
     """rows: list of (account, fund, debit, credit, unit_id, memo). Emits the
     real posting order: entry (unposted) -> lines -> UPDATE posted_at, which is
-    what trg_entry_balanced expects. Must run inside one d1.batch() in the app."""
+    what trg_entry_balanced expects. Must run inside one d1.batch() in the app.
+
+    `defer_post=True` stops before the posting step and returns (eid, post_sql)
+    so the caller can link its source document FIRST. Migration 0024's
+    orphan-entry guard checks, at the moment of posting, that the payment or
+    expense this entry names actually points back at it — so "post, then
+    attach" is a state the database refuses, and rightly: for one statement the
+    books would carry income attributed to a receipt that does not yet claim
+    it."""
     global entry_n, line_n
     entry_n += 1
     eid = did("JE", entry_n)
@@ -213,8 +222,11 @@ def post_entry(dst, desc, source_type, source_id, rows, date, creator=TREASURER,
             f"debit_piastres, credit_piastres, unit_id, memo_ar) VALUES "
             f"({q(did('JL', line_n))},{q(eid)},{i},{q(acct)},{q(fund)},{dr},{cr},"
             f"{q(unit)},{q(memo)});")
-    dst(f"UPDATE journal_entries SET approved_by={q(approver)}, posted_at={q(date + 'T10:00:00Z')} "
-        f"WHERE id={q(eid)};")
+    post_sql = (f"UPDATE journal_entries SET approved_by={q(approver)}, "
+                f"posted_at={q(date + 'T10:00:00Z')} WHERE id={q(eid)};")
+    if defer_post:
+        return eid, post_sql
+    dst(post_sql)
     return eid
 
 OPENING_CASH = 4_500_000      # 45,000.00 ج.م  — INVENTED
@@ -295,12 +307,14 @@ def emit_payment(i, amount, status, category, ledger_account, date,
         rows = [(asset, F_OP, amount, 0, uid, "تحصيل"),
                 (A_SUBS, F_OP, 0, amount, uid, "اشتراك 2026")]
 
-    eid = post_entry(P, f"إيصال {rno} — عمارة {units[i][1]} شقة {units[i][2]}",
-                     "payment", pid, rows, date,
-                     creator=TREASURER, approver=CHAIR)
+    eid, post_sql = post_entry(P, f"إيصال {rno} — عمارة {units[i][1]} شقة {units[i][2]}",
+                               "payment", pid, rows, date,
+                               creator=TREASURER, approver=CHAIR, defer_post=True)
+    # Attach the receipt to the entry, and only then post it. See `defer_post`.
     P(f"UPDATE payments SET status='approved', approved_amount_piastres={amount}, "
       f"journal_entry_id={q(eid)}, reviewed_by={q(CHAIR)}, reviewed_at={q(date + 'T19:00:00Z')}, "
       f"fund_id={q(F_DEP if deposit else F_OP)} WHERE id={q(pid)};")
+    P(post_sql)
     if over_split:
         P(f"INSERT INTO resident_credits (id, unit_id, profile_id, amount_piastres, "
           f"source_payment_id, journal_entry_id) VALUES ({q(did('RCR', pay_n))},{q(uid)},"
@@ -426,11 +440,13 @@ for n, (month, kind, amount, desc, vendor) in enumerate(EXPENSES, start=1):
       f"({q(eid_x)},{q(f'E-2026-{n:05d}')},{q(cat)},{amount},{q(date)},{q(desc)},{q(vendor)},"
       f"{q(F_OP)},'recorded',{q(OPERATOR)}"
       f"{f', {q(CHAIR)}, {q(date + chr(84) + chr(48) + chr(57) + chr(58) + chr(48) + chr(48) + chr(58) + chr(48) + chr(48) + chr(90))}' if needs_second else ''});")
-    ex_eid = post_entry(P, desc, "expense", eid_x, [
+    ex_eid, ex_post = post_entry(P, desc, "expense", eid_x, [
         (acct,  F_OP, amount, 0, None, desc),
         (payer, F_OP, 0, amount, None, "صرف"),
-    ], date, creator=OPERATOR, approver=TREASURER)
+    ], date, creator=OPERATOR, approver=TREASURER, defer_post=True)
+    # Attach first, post second — same rule as the receipts above.
     P(f"UPDATE expenses SET status='posted', journal_entry_id={q(ex_eid)} WHERE id={q(eid_x)};")
+    P(ex_post)
 
 # ==================================================== staff & content =====
 K = lines_content.append

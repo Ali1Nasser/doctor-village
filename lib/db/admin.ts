@@ -61,6 +61,17 @@ export async function listCategories(ctx: AuthContext, db: Db): Promise<Category
   return r.results ?? [];
 }
 
+/** The funds a category may default to. A deposit category must land in a
+ *  non-spendable trust fund; the form defaults by kind and the board can still
+ *  choose a reserve fund deliberately. */
+export async function fundChoices(ctx: AuthContext, db: Db) {
+  require_(ctx.role, 'category.manage');
+  const r = await db.prepare(
+    `SELECT id, name_ar, kind, is_spendable FROM funds WHERE is_active = 1 ORDER BY kind, id`
+  ).all<{ id: string; name_ar: string; kind: string; is_spendable: number }>();
+  return r.results ?? [];
+}
+
 /**
  * The ledger accounts a category may point at.
  *

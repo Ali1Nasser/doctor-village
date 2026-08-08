@@ -170,13 +170,22 @@ export async function postExpense(
            debit_piastres, credit_piastres, memo_ar)
          VALUES (?,?,2,?,?,0,?,?)`
       ).bind(newId('JL'), entryId, cr, fund, e.amount_piastres, e.description_ar),
-      db.prepare(
-        `UPDATE journal_entries SET approved_by = ?, posted_at = ? WHERE id = ?`
-      ).bind(ctx.personId, ts, entryId),
+      // ⭐ LINK BEFORE POSTING. These two used to be the other way round, and
+      // the order is now load-bearing: migration 0024's orphan-entry guard
+      // fires on the transition to `posted_at IS NOT NULL` and asks whether the
+      // expense this entry names actually points back at it. Posting first
+      // means the entry spends one statement claiming a source that does not
+      // yet agree — which is precisely the state the guard exists to refuse.
+      //
+      // Semantically it was always the wrong order too: the books should not
+      // say "posted" a moment before the document says which posting it became.
       db.prepare(
         `UPDATE expenses SET status = 'posted', journal_entry_id = ?
           WHERE id = ? AND status IN ('recorded','countersigned')`
       ).bind(entryId, e.id),
+      db.prepare(
+        `UPDATE journal_entries SET approved_by = ?, posted_at = ? WHERE id = ?`
+      ).bind(ctx.personId, ts, entryId),
       // The write and its audit row in ONE batch — the `mutate()` rule from
       // `mutations.ts`, applied by hand here because this batch also carries the
       // journal entry and its lines, which `mutate()` does not model.

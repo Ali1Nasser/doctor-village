@@ -1278,3 +1278,24 @@ export async function recordQuotaSnapshot(
 
   return { used, limit, pct };
 }
+
+/**
+ * The board's PUBLISHED contact details, for `/help`.
+ *
+ * No `AuthContext`: the route already required a session, and there is nothing
+ * here that varies by caller — it is one row the board chose to publish. Same
+ * shape as `recordQuotaSnapshot` and the `blobs.ts` helpers, and documented for
+ * the same reason: an unusual signature in this file needs to say why.
+ *
+ * Everything is nullable. Until somebody types a number into the settings
+ * screen, `/help` shows no number — never a guess, never one lifted out of
+ * `phone_identifiers`, which holds login identifiers rather than published
+ * numbers (C6).
+ */
+export async function helpContacts(db: Db) {
+  const r = await db.prepare(
+    `SELECT label_ar, phone, whatsapp, hours_ar FROM v_help_contacts`
+  ).first<{ label_ar: string | null; phone: string | null;
+            whatsapp: string | null; hours_ar: string | null }>();
+  return r ?? { label_ar: null, phone: null, whatsapp: null, hours_ar: null };
+}

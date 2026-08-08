@@ -124,6 +124,7 @@ const SCREENS: [string, string, string][] = [
   ['staff',      '/admin/staff',      'tok-admin'],
   ['audit',      '/admin/audit',      'tok-admin'],
   ['settlements','/admin/settlements','tok-admin'],
+  ['help',       '/help',            'tok-res'],
   // The board's own home. `home` above is the resident's; an admin sees the
   // same page plus the board-tools card, and that card is the only route into
   // every /admin/* screen — so it gets rendered and looked at, not assumed.

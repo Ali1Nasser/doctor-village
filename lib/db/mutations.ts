@@ -206,19 +206,36 @@ export async function countersignExpense(
 export async function createCategory(
   ctx: AuthContext, db: Db,
   c: { nameAr: string; direction: 'income' | 'expense'; kind: string;
-       ledgerAccountId: Id; icon?: string | null },
+       ledgerAccountId: Id; fundId?: Id | null; icon?: string | null },
 ): Promise<string> {
   require_(ctx.role, 'category.manage');
   if (!c.nameAr?.trim()) throw new LedgerRefused('اكتب اسم البند');
+
+  // ⭐ `default_fund_id` is not optional in practice, and the first version of
+  // this function left it NULL. A category with no fund is one a receipt cannot
+  // be posted against: approving it refuses with «البند ده مش مربوط بصندوق» and
+  // the admin has no screen that could fix it. Found by a test that approved a
+  // payment on a category the product itself had created.
+  //
+  // Defaulted by kind rather than merely required, because there is exactly one
+  // right answer for a deposit — a trust fund, never spendable — and getting it
+  // wrong is 06 §1's expensive mistake wearing a different hat.
+  const fund = c.fundId ?? (await db.prepare(
+    `SELECT id FROM funds
+      WHERE is_active = 1 AND kind = CASE WHEN ? = 'deposit' THEN 'deposit' ELSE 'operating' END
+      ORDER BY id LIMIT 1`
+  ).bind(c.kind).first<{ id: string }>())?.id;
+  if (!fund) throw new LedgerRefused('مفيش صندوق مناسب للبند ده — اظبط الصناديق الأول');
+
   const id = newId('CAT');
   await mutate(db, ctx,
     { action: 'category.create', table: 'categories', entityId: id,
-      after: { name: c.nameAr.trim(), direction: c.direction, kind: c.kind } },
+      after: { name: c.nameAr.trim(), direction: c.direction, kind: c.kind, fund } },
     db.prepare(
-      `INSERT INTO categories (id, name_ar, direction, kind, ledger_account_id, icon,
-         sort_order, is_active)
-       VALUES (?,?,?,?,?,?, (SELECT COALESCE(MAX(sort_order),0)+10 FROM categories), 1)`
-    ).bind(id, c.nameAr.trim(), c.direction, c.kind, c.ledgerAccountId, c.icon || null),
+      `INSERT INTO categories (id, name_ar, direction, kind, ledger_account_id,
+         default_fund_id, icon, sort_order, is_active)
+       VALUES (?,?,?,?,?,?,?, (SELECT COALESCE(MAX(sort_order),0)+10 FROM categories), 1)`
+    ).bind(id, c.nameAr.trim(), c.direction, c.kind, c.ledgerAccountId, fund, c.icon || null),
   );
   return id;
 }

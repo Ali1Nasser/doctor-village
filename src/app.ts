@@ -28,6 +28,7 @@ import * as onboard from '../lib/db/onboarding.js';
 import * as fees from '../lib/db/fees.js';
 import * as settle from '../lib/db/settlements.js';
 import * as adm from '../lib/db/admin.js';
+import * as approve from '../lib/db/approve.js';
 import * as av from './views/admin-pages.js';
 import * as mutations from '../lib/db/mutations.js';
 import * as expenses from '../lib/db/expenses.js';
@@ -1072,6 +1073,82 @@ export function createApp(deps: AppDeps) {
     })), warn, deps.demo));
   });
 
+  /**
+   * ⭐ The route the ✅ اعتماد button has always posted to, and which did not
+   * exist. `/admin/review` rendered a form pointing at `/admin/review/:id`;
+   * that returned 404 on every deployment. The central act of the product — a
+   * board member accepting a resident's receipt — could not be performed from
+   * the site at all.
+   *
+   * `approveAndPost` is the other half: nothing anywhere created the journal
+   * entry an approval has to reference, so the only receipts ever posted were
+   * the ones the demo seed wrote by hand.
+   *
+   * A rejection needs a reason and does not touch the ledger, so it stays on
+   * `reviewPayment`. An approval creates, attaches and posts the entry.
+   */
+  const reviewScreen = async (ctx: AuthContext, flash?: string, error?: string) => {
+    const rows = await data.listReviewQueue(ctx, deps.db) as Array<Record<string, string | number>>;
+    return v.reviewPage(rows.map(r => ({
+      id: String(r['id']), receiptNo: String(r['receipt_no']),
+      amountPiastres: Number(r['claimed_amount_piastres']),
+      transferDate: String(r['transfer_date']), categoryAr: String(r['category_ar']),
+      buildingCode: String(r['building_code']), unitNumber: String(r['unit_number']),
+      referenceNo: r['reference_no'] as string | null, noteAr: r['note_ar'] as string | null,
+    })), await data.singleAdminWarning(ctx, deps.db), deps.demo, flash, error);
+  };
+
+  app.post('/admin/review/:id', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'payment.review')) throw new Forbidden('payment.review');
+    const id = c.req.param('id');
+    const f = await c.req.parseBody();
+    const kind = String(f['kind'] ?? '');
+    const reason = String(f['reason'] ?? '').trim() || null;
+
+    try {
+      // A receipt is claimed for review before it is decided. Doing it here
+      // rather than asking the admin to press twice: the queue IS the act of
+      // taking it, and a two-step dance on a phone loses people.
+      await data.takeForReview(ctx, deps.db, id as never);
+
+      if (kind === 'approve') {
+        const amountRaw = String(f['amount'] ?? '').trim();
+        const claimed = Number((await data.getPayment(ctx, deps.db, id as never, deps.now))
+          .claimed_amount_piastres);
+        let approved = claimed;
+        if (amountRaw) {
+          const parsed = parseMoney(amountRaw);
+          if (!parsed.ok) return html(await reviewScreen(ctx, undefined, parsed.messageAr), 400);
+          approved = parsed.value;
+        }
+        const out = await approve.approveAndPost(ctx, deps.db, id as never, approved, reason, deps.now);
+        await pushLatest(String((await data.getPayment(ctx, deps.db, id as never, deps.now)).submitted_by));
+        return html(await reviewScreen(ctx, out.creditPiastres > 0
+          ? _layout.msg(_t.admin.approvedWithCredit,
+              { amount: _layout.money(out.creditPiastres) })
+          : _t.admin.approvedOk));
+      }
+
+      if (kind === 'reject' || kind === 'need_info' || kind === 'duplicate') {
+        if (!reason) {
+          return html(await reviewScreen(ctx, undefined, _t.admin.reasonRequired), 400);
+        }
+        const p = await data.getPayment(ctx, deps.db, id as never, deps.now);
+        await data.reviewPayment(ctx, deps.db, id as never,
+          { kind, reasonAr: reason } as never, deps.now);
+        await pushLatest(String(p.submitted_by));
+        return html(await reviewScreen(ctx, _t.admin.decisionSaved));
+      }
+
+      return html(await reviewScreen(ctx, undefined, _t.admin.reasonRequired), 400);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await reviewScreen(ctx, undefined, e.reasonAr), 409);
+      if (e instanceof Forbidden) return html(await reviewScreen(ctx, undefined, e.reasonAr), 403);
+      throw e;
+    }
+  });
+
   /* ---- receipt upload -------------------------------------------------- */
 
   app.post('/api/payments/upload', async c => {
@@ -1532,6 +1609,7 @@ export function createApp(deps: AppDeps) {
     av.categoriesPage({
       categories: await adm.listCategories(ctx, deps.db),
       accounts: await adm.accountChoices(ctx, deps.db),
+      funds: await adm.fundChoices(ctx, deps.db),
       flash, error,
     });
 
@@ -1555,6 +1633,7 @@ export function createApp(deps: AppDeps) {
         direction: kind === 'expense' ? 'expense' : 'income',
         kind,
         ledgerAccountId: String(f['account'] ?? '') as never,
+        fundId: (String(f['fund'] ?? '') || null) as never,
         icon: String(f['icon'] ?? '') || null,
       });
     } catch (e) {
@@ -1719,6 +1798,14 @@ export function createApp(deps: AppDeps) {
     const ctx = need(c);
     if (!can(ctx.role, 'audit.read')) throw new Forbidden('audit.read');
     return html(av.auditPage({ rows: await adm.auditFeed(ctx, deps.db) }));
+  });
+
+  /* ---- /help — the button on every screen -------------------------------- */
+
+  app.get('/help', async c => {
+    const ctx = need(c);
+    const contact = await data.helpContacts(deps.db);
+    return html(av.helpPage({ contact, canEditSettings: can(ctx.role, 'settings.edit') }));
   });
 
   /* ---- settlements, credits and period close (CP-5) --------------------- */

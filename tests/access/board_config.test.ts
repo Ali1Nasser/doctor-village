@@ -314,3 +314,203 @@ describe('categories, roles and settings', () => {
     await mut.setPersonActive(admin, db, OP as never, true, NOW);
   });
 });
+
+/* ================================================================== */
+/**
+ * ⭐ Approving a receipt from the screen the board actually uses.
+ *
+ * `/admin/review` has rendered an «✅ اعتماد» button since CP-4 whose form
+ * posts to `/admin/review/:id`. That route did not exist — the central act of
+ * the entire product returned 404 on every deployment. And the API path was no
+ * substitute: `reviewPayment` links a `journalEntryId` its caller must supply,
+ * and nothing anywhere created one, so the only receipts ever posted were the
+ * ones the demo seed wrote by hand.
+ *
+ * These tests drive the real form, over HTTP, and then check the LEDGER —
+ * because "the request returned 200" is exactly the assertion that would have
+ * passed while the money went nowhere.
+ */
+describe('⭐ approving a receipt posts real money', () => {
+  const RES2 = id('PRF', 7);
+  let payId = '';
+
+  const submit = (n: number, amount: number, kind: 'subs' | 'deposit' = 'subs') => {
+    const pid = id('PAY', n);
+    const cat = raw.prepare(
+      kind === 'deposit'
+        ? `SELECT id FROM categories WHERE kind='deposit' LIMIT 1`
+        : `SELECT id FROM categories WHERE kind='operating_income' LIMIT 1`)
+      .get() as { id: string };
+    raw.prepare(
+      `INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,
+         claimed_amount_piastres,method,transfer_date,storage_key,status,submitted_at)
+       VALUES (?,?,?,?,?,?,'instapay','2027-02-01',?,'submitted','2027-02-01T09:00:00Z')`)
+      .run(pid, 'R-2027-' + n, id('UNT', 1), RES2, cat.id, amount, `receipts/r${n}.webp`);
+    return pid;
+  };
+
+  const ledger = (entryId: string) => raw.prepare(
+    `SELECT account_id, debit_piastres dr, credit_piastres cr FROM journal_lines
+      WHERE entry_id = ? ORDER BY line_no`).all(entryId) as
+    Array<{ account_id: string; dr: number; cr: number }>;
+
+  before(() => {
+    const x = (s: string, ...p: unknown[]) => raw.prepare(s).run(...p as never[]);
+    x(`INSERT INTO profiles (id,full_name,role) VALUES (?,?,?)`, RES2, 'د. ليلى', 'resident');
+    x(`INSERT INTO unit_owners (id,unit_id,profile_id,valid_from) VALUES (?,?,?,?)`,
+      id('UOW', 7), id('UNT', 1), RES2, '2020-01-01');
+    // A fresh operator session: `tok-op` was revoked earlier by the
+    // deactivate/reactivate test, and correctly not restored — reactivating an
+    // account does not un-revoke the sessions that were killed with it.
+    x(`INSERT INTO sessions (id,profile_id,token_hash,expires_at) VALUES (?,?,?,?)`,
+      id('SES', 9), OP, sha('tok-op2'), '2028-01-01T00:00:00Z');
+  });
+
+  it('the route the button posts to EXISTS', async () => {
+    payId = submit(50, 600000);
+    const r = await req(`/admin/review/${payId}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'approve' }).toString(),
+    });
+    assert.notEqual(r.status, 404, 'the approve button still posts to nowhere');
+    assert.equal(r.status, 200);
+  });
+
+  it('⭐ the money is in the books, balanced, and posted', () => {
+    const p = raw.prepare(
+      `SELECT status, approved_amount_piastres, journal_entry_id FROM payments WHERE id=?`)
+      .get(payId) as { status: string; approved_amount_piastres: number; journal_entry_id: string };
+    assert.equal(p.status, 'approved');
+    assert.equal(p.approved_amount_piastres, 600000);
+    assert.ok(p.journal_entry_id, 'an approved receipt with no journal entry — this is R-078');
+
+    const e = raw.prepare(`SELECT posted_at, source_id FROM journal_entries WHERE id=?`)
+      .get(p.journal_entry_id) as { posted_at: string | null; source_id: string };
+    assert.ok(e.posted_at, 'the entry was created and never posted');
+    assert.equal(e.source_id, payId, 'the entry does not name the receipt it came from');
+
+    const lines = ledger(p.journal_entry_id);
+    const dr = lines.reduce((n, l) => n + l.dr, 0);
+    const cr = lines.reduce((n, l) => n + l.cr, 0);
+    assert.equal(dr, cr, 'the entry does not balance');
+    assert.equal(dr, 600000);
+    // instapay in, subscription income out
+    assert.equal(lines[0]!.account_id, 'ACC00000000000000000001103');
+  });
+
+  it('the resident is told, in the same act', () => {
+    const n = raw.prepare(
+      `SELECT kind, title_ar FROM notifications WHERE payment_id=?`).all(payId) as
+      Array<{ kind: string; title_ar: string }>;
+    assert.equal(n.length, 1, 'the resident was told zero times, or twice');
+    assert.equal(n[0]!.kind, 'payment_approved');
+  });
+
+  it('a double-tapped approve is refused, not posted twice', async () => {
+    const before = (raw.prepare(`SELECT COUNT(*) n FROM journal_entries`)
+      .get() as { n: number }).n;
+    const r = await req(`/admin/review/${payId}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'approve' }).toString(),
+    });
+    assert.equal(r.status, 409);
+    assert.equal((raw.prepare(`SELECT COUNT(*) n FROM journal_entries`)
+      .get() as { n: number }).n, before, 'a replayed approval posted a second entry');
+  });
+
+  it('⭐ الوديعة lands on a LIABILITY, never on income (06 §1)', async () => {
+    const dep = submit(51, 300000, 'deposit');
+    const rr = await req(`/admin/review/${dep}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'approve' }).toString(),
+    });
+    assert.equal(rr.status, 200);
+
+    const eid = (raw.prepare(`SELECT journal_entry_id j FROM payments WHERE id=?`)
+      .get(dep) as { j: string }).j;
+    const credited = ledger(eid).find(l => l.cr > 0)!;
+    const acc = raw.prepare(`SELECT type FROM accounts WHERE id=?`)
+      .get(credited.account_id) as { type: string };
+    assert.equal(acc.type, 'liability',
+      'a deposit was booked as income — the most expensive mistake in this domain');
+  });
+
+  it('⭐ paying more than the due opens a CREDIT, not extra income', async () => {
+    // The excess is computed against what the flat ACTUALLY still owes, which
+    // earlier tests in this file have moved around. Reading it here rather than
+    // hard-coding is the point: the split has to follow the ledger, not a
+    // number the test happened to know.
+    const owed = (raw.prepare(
+      `SELECT COALESCE(outstanding_piastres, 0) o FROM v_unit_balance WHERE unit_id = ?`)
+      .get(id('UNT', 1)) as { o: number } | undefined)?.o ?? 0;
+    const amount = owed + 250000;
+    const over = submit(52, amount);
+    await req(`/admin/review/${over}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'approve' }).toString(),
+    });
+    const eid = (raw.prepare(`SELECT journal_entry_id j FROM payments WHERE id=?`)
+      .get(over) as { j: string }).j;
+    const credit = ledger(eid).find(l => l.account_id === 'ACC00000000000000000002102');
+    assert.ok(credit, 'an overpayment was booked as income');
+    assert.equal(credit!.cr, 250000, 'the excess over the due was not what became the credit');
+
+    const row = raw.prepare(
+      `SELECT amount_piastres FROM resident_credits WHERE source_payment_id=?`)
+      .get(over) as { amount_piastres: number } | undefined;
+    assert.ok(row, 'no credit row — the village owes money it has not written down');
+    assert.equal(row!.amount_piastres, 250000);
+  });
+
+  it('an operator cannot approve, and the maker cannot approve their own', async () => {
+    const p2 = submit(53, 100000);
+    assert.equal((await req(`/admin/review/${p2}`, 'tok-op2', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'approve' }).toString(),
+    })).status, 403);
+
+    // an admin submitting for themselves, then trying to accept it
+    const own = id('PAY', 54);
+    const cat = raw.prepare(`SELECT id FROM categories WHERE kind='operating_income' LIMIT 1`)
+      .get() as { id: string };
+    raw.prepare(
+      `INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,
+         claimed_amount_piastres,method,transfer_date,storage_key,status)
+       VALUES (?,?,?,?,?,?,'cash','2027-02-01',?,'submitted')`)
+      .run(own, 'R-2027-OWN', id('UNT', 1), ADMIN, cat.id, 5000, 'receipts/own.webp');
+    const r = await req(`/admin/review/${own}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'approve' }).toString(),
+    });
+    assert.equal(r.status, 403, 'an admin approved a receipt they submitted themselves');
+  });
+
+  it('rejecting needs a reason and touches no money', async () => {
+    const p3 = submit(55, 100000);
+    const before = (raw.prepare(`SELECT COUNT(*) n FROM journal_entries`).get() as { n: number }).n;
+
+    const noReason = await req(`/admin/review/${p3}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'reject' }).toString(),
+    });
+    assert.equal(noReason.status, 400, 'a receipt was rejected with no reason for the resident');
+
+    const ok = await req(`/admin/review/${p3}`, 'tok-admin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ kind: 'reject', reason: 'الصورة مش واضحة، مش بايِن رقم العملية' }).toString(),
+    });
+    assert.equal(ok.status, 200);
+    assert.equal((raw.prepare(`SELECT status FROM payments WHERE id=?`).get(p3) as
+      { status: string }).status, 'rejected');
+    assert.equal((raw.prepare(`SELECT COUNT(*) n FROM journal_entries`).get() as { n: number }).n,
+      before, 'a rejection moved the ledger');
+  });
+});

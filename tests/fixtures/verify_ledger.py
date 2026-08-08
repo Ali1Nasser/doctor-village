@@ -160,13 +160,53 @@ db2.close()
 # =============================================================================
 print("\n=== 4. Balanced-entry enforcement ===")
 # =============================================================================
+def source_document(d, src, srcid, amount, desc):
+    """Write the receipt or voucher an entry claims to come from.
+
+    Migration 0024's orphan-entry guard checks at POSTING time that a payment or
+    expense named by `source_id` exists and points back at the entry. This
+    fixture used to invent source ids, which meant the hand-computed example
+    postings from 06 §2 were asserting an accounting equation over entries that
+    no document supported — the exact discrepancy an annual audit exists to
+    find, in the file whose job is to prove there is none.
+    """
+    if src == "payment":
+        d.execute("INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,"
+                  "claimed_amount_piastres,method,transfer_date,storage_key,status) "
+                  "VALUES (?,?,?,?,?,?, 'instapay','2026-06-01',?, 'under_review')",
+                  (srcid, "R-" + srcid, uid("UNT", 1), uid("PRF", 4), uid("CAT", 1),
+                   amount, "receipts/" + srcid + ".webp"))
+    elif src == "expense":
+        d.execute("INSERT INTO expenses (id,voucher_no,category_id,amount_piastres,spent_on,"
+                  "description_ar,fund_id,status,recorded_by) "
+                  "VALUES (?,?,?,?, '2026-06-01',?,?, 'recorded', ?)",
+                  (srcid, "E-" + srcid, uid("CAT", 2), amount, desc,
+                   uid("FND", 1), uid("PRF", 3)))
+
+
+def attach_source(d, src, srcid, eid, amount):
+    """Link the document to the entry, BEFORE the entry is posted."""
+    if src == "payment":
+        d.execute("UPDATE payments SET status='approved', approved_amount_piastres=?, "
+                  "journal_entry_id=?, reviewed_by=?, reviewed_at='2026-06-01T10:00:00Z' WHERE id=?",
+                  (amount, eid, uid("PRF", 2), srcid))
+    elif src == "expense":
+        d.execute("UPDATE expenses SET status='posted', journal_entry_id=? WHERE id=?",
+                  (eid, srcid))
+
+
 def entry(d, eid, no, desc, src, srcid, lines, period=None, post=True, creator=1, approver=2):
+    debit_total = sum(dr for (_a, dr, _c, _f, _u) in lines)
+    if srcid:
+        source_document(d, src, srcid, debit_total, desc)
     d.execute("INSERT INTO journal_entries (id,entry_no,entry_date,period_id,description_ar,source_type,source_id,created_by) "
               "VALUES (?,?,?,?,?,?,?,?)",
               (eid, no, "2026-06-01", period or uid("FPR", 1), desc, src, srcid, uid("PRF", creator)))
     for i, (acct, dr, cr, fund, unit) in enumerate(lines, start=1):
         d.execute("INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,credit_piastres,unit_id) "
                   "VALUES (?,?,?,?,?,?,?,?)", (uid(no.replace("-", ""), i), eid, i, acct, fund, dr, cr, unit))
+    if srcid:
+        attach_source(d, src, srcid, eid, debit_total)
     if post:
         d.execute("UPDATE journal_entries SET approved_by=?, posted_at=? WHERE id=?",
                   (uid("PRF", approver), "2026-06-01T10:00:00Z", eid))
@@ -319,6 +359,12 @@ for r in db.execute("SELECT * FROM profiles"):        bad.execute("INSERT INTO p
 for r in db.execute("SELECT * FROM buildings"):       bad.execute("INSERT INTO buildings VALUES (?,?,?,?,?)", r)
 for r in db.execute("SELECT * FROM units"):           bad.execute("INSERT INTO units VALUES (?,?,?,?,?,?)", r)
 for r in db.execute("SELECT * FROM funds"):           bad.execute("INSERT INTO funds VALUES (?,?,?,?,?)", r)
+# Categories too: the entries below name real receipts and vouchers now, and a
+# payment needs a category. Copied generically so a column added to `categories`
+# does not silently break this fixture.
+_cat_cols = len([c[1] for c in db.execute("PRAGMA table_info(categories)")])
+for r in db.execute("SELECT * FROM categories"):
+    bad.execute("INSERT INTO categories VALUES (" + ",".join("?" * _cat_cols) + ")", r)
 bad.execute("INSERT INTO fiscal_periods (id,name_ar,starts_on,ends_on) VALUES (?,?,?,?)",
             (uid("FPR",1), "سنة 2026", "2026-01-01", "2026-12-31"))
 bad.commit()

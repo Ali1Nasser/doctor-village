@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "map_id": "qaryat-al-atebaa-reference-2026-08-04",
+  "publication_status": "draft_unverified",
+  "production_seed_allowed": false,
+  "source": {
+    "file": "village-map-source.jpg",
+    "sha256": "5300a7c1c04f1bc5c0c5f438fdc18a3331c7a18c70cb9100e0e4ab818601742e",
+    "width_px": 1533,
+    "height_px": 1536,
+    "provenance": "user_supplied_screenshot"
+  },
+  "display_asset": {
+    "file": "village-map-display.jpg",
+    "sha256": "9f3358fe279609b42d0a40067a1f9f15ef2320c871fd5c86e45467b64da5746b",
+    "width_px": 1536,
+    "height_px": 1533,
+    "transformation": "rotate_90_degrees_counter_clockwise_and_strip_metadata"
+  },
+  "coverage": {
+    "status": "partial_unverified",
+    "visible_label_range": {
+      "from": 14,
+      "to": 46,
+      "confidence": "visual_reference_only"
+    },
+    "notes": [
+      "The photograph is cropped and is not a legal survey or GIS source.",
+      "The image does not establish the total number of buildings or units.",
+      "Buildings 1 through 13 are not established by this image.",
+      "Every visual label-to-building link requires written board verification."
+    ]
+  },
+  "unit_counts": null,
+  "hotspots": []
+}

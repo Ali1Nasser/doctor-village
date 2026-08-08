@@ -99,7 +99,20 @@ async function submitted(n: number, amount: number): Promise<Id> {
   return pid as Id;
 }
 
-/** A posted journal entry an approval can point at. */
+/**
+ * A journal entry an approval can point at, created and left UNPOSTED.
+ *
+ * It used to post the entry here, before the receipt was approved and linked.
+ * Migration 0024's orphan-entry guard now refuses that at the moment of
+ * posting — a posted entry that names a receipt which does not point back at
+ * it is income attributed to nothing — and it was right to: the fixture was
+ * writing a shape the application cannot produce.
+ *
+ * These tests are about the MESSAGE the resident gets, not about the ledger,
+ * so the entry stays unposted and `reviewPayment` links it. The tests that care
+ * about the money going somewhere live in `board_config.test.ts` and drive
+ * `approveAndPost`, which is the real path.
+ */
 function entryFor(n: number, amount: number): Id {
   const eid = id('JE', n);
   const x = (s: string, ...p: unknown[]) => raw.prepare(s).run(...p as never[]);
@@ -112,7 +125,6 @@ function entryFor(n: number, amount: number): Id {
   x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,
        credit_piastres,unit_id) VALUES (?,?,2,?,?,0,?,?)`,
     id('JL', n * 2 + 1), eid, I_SUBS, OPF, amount, U1);
-  x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-05-02T10:00:00Z' WHERE id=?`, A1, eid);
   return eid as Id;
 }
 

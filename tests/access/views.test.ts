@@ -332,6 +332,15 @@ describe('R-053/R-054 — every caption names what it actually contains', () => 
     // An unpaid contractor invoice, and money moved into the emergency reserve.
     // Both are ordinary. Both used to land under the wrong Arabic sentence.
     const eid = id('JE', 70);
+    // The voucher is written too. This entry used to name an expense document
+    // that did not exist — 500.00 ج.م owed to a contractor, in the books, with
+    // nothing behind it. Migration 0024's orphan-entry guard refuses that.
+    const cX = (db.prepare(
+      `SELECT id FROM categories WHERE direction='expense' LIMIT 1`).get() as { id: string }).id;
+    x(`INSERT INTO expenses (id,voucher_no,category_id,amount_piastres,spent_on,
+         description_ar,fund_id,status,recorded_by)
+       VALUES (?,'E-2026-00070',?,50000,'2026-06-15','فاتورة مصعد لسه ماتدفعتش',?, 'recorded', ?)`,
+      id('EXP', 70), cX, OP, TREAS);
     x(`INSERT INTO journal_entries (id,entry_no,entry_date,period_id,description_ar,
          source_type,source_id,created_by) VALUES (?,'J-70','2026-06-15',?,'فاتورة مصعد لسه ماتدفعتش',
          'expense',?,?)`, eid, PERIOD, id('EXP', 70), TREAS);
@@ -339,6 +348,7 @@ describe('R-053/R-054 — every caption names what it actually contains', () => 
        VALUES (?,?,1,?,?,50000,0)`, id('JL', 70), eid, E_MAINT, OP);
     x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,credit_piastres)
        VALUES (?,?,2,?,?,0,50000)`, id('JL', 71), eid, L_SUPPLIER, OP);
+    x(`UPDATE expenses SET status='posted', journal_entry_id=? WHERE id=?`, eid, id('EXP', 70));
     x(`UPDATE journal_entries SET approved_by=?, posted_at='2026-06-15T10:00:00Z' WHERE id=?`, ADMIN, eid);
 
     const eid2 = id('JE', 71);

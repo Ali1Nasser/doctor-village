@@ -222,6 +222,7 @@ export function feeDuesPage(d: {
 export function categoriesPage(d: {
   categories: CategoryRow[];
   accounts: { id: string; code: string; name_ar: string; type: string }[];
+  funds: { id: string; name_ar: string; kind: string; is_spendable: number }[];
   flash?: string;
   error?: string;
 }): string {
@@ -277,6 +278,15 @@ export function categoriesPage(d: {
           `<option value="${esc(a.id)}">${esc(a.code)} — ${esc(a.name_ar)}</option>`).join('')}
       </select>
       <p class="hint" id="cacc-hint">${esc(t.categories.accountHint)}</p>
+    </div>
+    <div class="field">
+      <label for="cfund">${esc(t.categories.fund)}</label>
+      <select id="cfund" name="fund" aria-describedby="cfund-hint">
+        ${d.funds.map(f =>
+          `<option value="${esc(f.id)}">${esc(f.name_ar)}${
+            f.is_spendable ? '' : ' — ' + esc(t.categories.notSpendable)}</option>`).join('')}
+      </select>
+      <p class="hint" id="cfund-hint">${esc(t.categories.fundHint)}</p>
     </div>
     <div class="field">
       <label for="cicon">${esc(t.categories.icon)}</label>
@@ -762,5 +772,79 @@ export function settlementsPage(d: {
   <h3 style="margin-block-start:0">📅 ${esc(t.settle.periodsTitle)}</h3>
   <p class="hint">${esc(t.settle.periodsHint)}</p>
   ${d.periods.map(period).join('')}
+</div>`);
+}
+
+/* ===================================================================== */
+/* /help — the destination of the button on every screen                 */
+/* ===================================================================== */
+
+/**
+ * Every screen renders a floating «محتاج مساعدة؟» button pointing at `/help`,
+ * and the route did not exist: the most visible control in the product, on all
+ * 33 screens, returned 404. A resident who was already stuck pressed the help
+ * button and got an error page.
+ *
+ * ## Why the phone number is a setting and not a lookup
+ *
+ * The obvious implementation reads the chairman's number out of
+ * `phone_identifiers` and prints it. That is a C6 breach with extra steps: a
+ * board member's number is in that table because it is how he LOGS IN, and
+ * storing a login identifier is not consent to broadcast it to 204 flats. So
+ * `office_phone` is separate, deliberate, and NULL until somebody publishes it
+ * — the screen simply says no number has been set rather than inventing one.
+ *
+ * ## The five questions
+ *
+ * Not invented: they are the failure modes this codebase spent 28 sessions on.
+ * Lost phone (the recovery path and why it is deliberately slow), a receipt
+ * still pending, a figure that looks wrong, what الوديعة is, and who can see
+ * what. The last line is an anti-phishing sentence, because a portal that
+ * never asks for a password should say so out loud.
+ */
+export function helpPage(d: {
+  contact: { label_ar: string | null; phone: string | null;
+             whatsapp: string | null; hours_ar: string | null };
+  canEditSettings: boolean;
+}): string {
+  const c = d.contact;
+  const hasContact = Boolean(c.phone || c.whatsapp);
+  const faq = ([['q1', 'a1'], ['q2', 'a2'], ['q3', 'a3'], ['q4', 'a4'], ['q5', 'a5']] as const)
+    .map(([q, a]) => `
+    <details>
+      <summary>${esc(t.help[q])}</summary>
+      <p class="prose">${esc(t.help[a])}</p>
+    </details>`).join('');
+
+  return page({ title: t.help.title, active: 'home' }, `
+<div class="card">
+  <h2 style="margin-block-start:0">💬 ${esc(t.help.title)}</h2>
+  <p class="muted">${esc(t.help.subtitle)}</p>
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">☎️ ${esc(t.help.contactTitle)}</h3>
+  ${hasContact ? `
+    ${c.label_ar ? `<p><b>${esc(c.label_ar)}</b></p>` : ''}
+    <div class="btn-row">
+      ${c.phone ? `<a class="btn" href="tel:${esc(c.phone)}">📞 ${esc(t.help.call)}
+        <bdi dir="ltr" class="num">${esc(c.phone)}</bdi></a>` : ''}
+      ${c.whatsapp ? `<a class="btn btn-2" href="https://wa.me/${esc(c.whatsapp.replace(/\D/g, ''))}">
+        💬 ${esc(t.help.whatsapp)}</a>` : ''}
+    </div>
+    ${c.hours_ar ? `<p class="muted">${esc(t.help.hours)}: ${esc(c.hours_ar)}</p>` : ''}
+  ` : `${empty('☎️', t.help.noContact,
+        d.canEditSettings ? t.help.noContactHint : t.help.noContact)}
+    ${d.canEditSettings
+      ? `<a class="btn btn-2" href="/admin/settings">${esc(t.settings.title)}</a>` : ''}`}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">❓ ${esc(t.help.faqTitle)}</h3>
+  ${faq}
+</div>
+
+<div class="card">
+  <div class="banner info" style="margin-block:0">🔒 ${esc(t.help.safety)}</div>
 </div>`);
 }

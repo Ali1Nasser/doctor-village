@@ -57,12 +57,17 @@ const P_OP = id('PRF', 4), P_A = id('PRF', 5), P_B = id('PRF', 6);
 const P_DEL_FIN = id('PRF', 7);   // delegate WITH financial rights on U_A
 const P_DEL_NOFIN = id('PRF', 8); // delegate WITHOUT financial rights on U_A
 const P_DEL_EXP = id('PRF', 9);   // delegate whose grant EXPIRED
-const PAY_A = id('PAY', 1), PAY_B = id('PAY', 2);
+const PAY_A = id('PAY', 1), PAY_B = id('PAY', 2), PAY_C = id('PAY', 3);
 const CAT = 'CAT0000000000000000000IN01';
 const A_INSTA = 'ACC00000000000000000001103', A_SUBS = 'ACC00000000000000000004101';
 const F_OP = 'FND00000000000000000000001';
 const PERIOD = id('FPR', 1);
 const JE1 = id('JE', 1), JL1 = id('JL', 1), JL2 = id('JL', 2);
+/** An unposted entry the one test that APPROVES successfully can consume.
+ *  `payments.journal_entry_id` is UNIQUE — one entry per receipt, which is
+ *  invariant 3 — so a test that approves cannot borrow JE1, which already
+ *  belongs to the settled receipt below. */
+const JE_FREE = id('JE', 2);
 
 let raw: DatabaseSync;
 let app: ReturnType<typeof createApp>;
@@ -146,14 +151,37 @@ before(() => {
        VALUES (?,?,?,?,?,?,?)`, key, 'receipts', 'payment_receipt', p, u, 1000, 'image/webp');
   }
 
-  // one posted journal entry, so test 15 has a real line to attack
+  // One posted journal entry, so test 15 has a real line to attack.
+  //
+  // It needs its OWN settled receipt, and the steps have to happen in the order
+  // the application uses them: entry (unposted) → lines → link the receipt →
+  // post. This used to point at PAY_A, which the tests below deliberately leave
+  // `submitted`, so the fixture was asserting that the books carry income from
+  // a receipt nobody approved. Migration 0024 refuses that now (the mirror of
+  // R-078) and was right to — the fixture was writing a state the application
+  // cannot produce.
   x(`INSERT INTO journal_entries (id,entry_no,entry_date,period_id,description_ar,source_type,source_id,created_by)
-     VALUES (?,?,?,?,?,?,?,?)`, JE1, 'J-1', '2026-06-01', PERIOD, 'قيد', 'payment', PAY_A, P_ADMIN);
+     VALUES (?,?,?,?,?,?,?,?)`, JE1, 'J-1', '2026-06-01', PERIOD, 'قيد', 'payment', PAY_C, P_ADMIN);
   x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,credit_piastres,unit_id)
      VALUES (?,?,?,?,?,?,?,?)`, JL1, JE1, 1, A_INSTA, F_OP, 600000, 0, U_A);
   x(`INSERT INTO journal_lines (id,entry_id,line_no,account_id,fund_id,debit_piastres,credit_piastres,unit_id)
      VALUES (?,?,?,?,?,?,?,?)`, JL2, JE1, 2, A_SUBS, F_OP, 0, 600000, U_A);
+
+  x(`INSERT INTO payments (id,receipt_no,unit_id,submitted_by,category_id,
+       claimed_amount_piastres,approved_amount_piastres,reviewed_by,reviewed_at,
+       method,transfer_date,storage_key,status,submitted_at,journal_entry_id)
+     VALUES (?,?,?,?,?,?,?,?,?,'instapay','2026-06-01',?,'approved','2026-06-01T09:00:00Z',?)`,
+    PAY_C, 'R-SETTLED', U_A, P_A, CAT, 600000, 600000, P_ADMIN2, '2026-06-01T10:00:00Z',
+    'receipts/' + U_A + '/c.webp', JE1);
+  x(`INSERT INTO storage_objects (storage_key,bucket,owner_kind,owner_id,unit_id,size_bytes,mime)
+     VALUES (?,?,?,?,?,?,?)`,
+    'receipts/' + U_A + '/c.webp', 'receipts', 'payment_receipt', PAY_C, U_A, 1000, 'image/webp');
+
   x(`UPDATE journal_entries SET approved_by=?, posted_at=? WHERE id=?`, P_ADMIN2, '2026-06-01T10:00:00Z', JE1);
+
+  // Left UNPOSTED and unlinked on purpose — see JE_FREE.
+  x(`INSERT INTO journal_entries (id,entry_no,entry_date,period_id,description_ar,source_type,source_id,created_by)
+     VALUES (?,?,?,?,?,?,?,?)`, JE_FREE, 'J-2', '2026-06-01', PERIOD, 'قيد', 'payment', PAY_A, P_ADMIN);
 
   x(`INSERT INTO staff (id,full_name,job_title_ar,monthly_salary_piastres) VALUES (?,?,?,?)`,
     id('STF',1), 'عم رجب', 'حارس أمن', 400000);
@@ -367,7 +395,7 @@ describe('maker–checker and the rbac/db agreement', () => {
   });
 
   it('approving twice posts once — idempotency (invariant 3)', async () => {
-    const body = JSON.stringify({ kind: 'approve', approvedAmountPiastres: 600000, journalEntryId: JE1 });
+    const body = JSON.stringify({ kind: 'approve', approvedAmountPiastres: 600000, journalEntryId: JE_FREE });
     const first = await req(`/api/payments/${PAY_A}/review`, TOKENS.admin, { method: 'POST', body });
     assert.equal(first.status, 200);
     const second = await req(`/api/payments/${PAY_A}/review`, TOKENS.admin, { method: 'POST', body });
