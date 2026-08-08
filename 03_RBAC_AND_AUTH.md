@@ -212,3 +212,29 @@ admins. A single operator must never be able to re-enroll a passkey alone.
 - Budget the message cost per login and show the owner a monthly estimate: *units × logins/month ×
   price per authentication message*. Reducing login frequency (30-day sessions) is a direct cost lever
   — note this to the owner as a reason the long session is deliberate, not lazy.
+
+
+---
+
+## ⚠️ Village map — restored 2026-08-08 from the v1.1 spec revision
+
+The pack's specification files are **v1.1 — village-map revision**; the copies this project was
+built from are v1.0 and omit every map paragraph, along with constraint **C13**, product goal 4 and
+`07_VILLAGE_MAP_SPEC.md`. Found by diffing the uploaded packs against this repo, twenty-seven
+sessions in (INSIGHTS 2026-08-08, R-084).
+
+**Map privacy:** `/map` is navigation, never a permission shortcut. A building click calls the same
+authorized API as every other screen. Draft imagery, names, phones, files, notes and private balances
+must never appear through map endpoints. See `07_VILLAGE_MAP_SPEC.md`.
+
+| Capability | developer | admin | operator | finance_reviewer | resident |
+|---|---|---|---|---|---|
+| Published map and approved aggregate building summary | ✔ | ✔ | ✔ | ✔ | ✔ |
+| View draft/source map; edit/link/publish features | ✔ | ✔ | ✖ | ✖ | ✖ |
+
+**As implemented (2026-08-08):** `/map` and `/buildings/:id` require any authenticated member
+(`profile.edit_own`); `/admin/map` and every mutation require `settings.edit`. `buildingSummary`
+returns aggregates only, gated on `settings.unit_status_public`, and returns NULL rather than zero
+when that is off — a zero would read as "this building owes nothing", which is a false statement
+rather than a withheld one. Asserted in `tests/access/board_config.test.ts`: no phone number and no
+resident name can reach a map endpoint.

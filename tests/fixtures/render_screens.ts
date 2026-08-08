@@ -56,17 +56,6 @@ const resident = raw.prepare(
      JOIN v_unit_balance ub ON ub.unit_id = uo.unit_id
     WHERE p.role='resident' AND ub.paid_piastres > 0 AND ub.outstanding_piastres > 0 LIMIT 1`
 ).get() as { id: string };
-// The village plan lives in the blob table like every other image (ADR-023).
-// `tools/load-map-image.mjs` verifies its checksum; here we only need the bytes
-// present so /map renders something other than a broken image.
-{
-  const bytes = readFileSync(join(ROOT, 'assets/maps/village-map-display.webp'));
-  raw.prepare(
-    `INSERT OR REPLACE INTO receipt_blobs (storage_key, mime, size_bytes, bytes)
-     VALUES (?,?,?,?)`
-  ).run('maps/village-map-2026-08-display.webp', 'image/webp', bytes.length, bytes);
-}
-
 const admin = raw.prepare(`SELECT id FROM profiles WHERE role='admin' LIMIT 1`).get() as { id: string };
 const sid = (n: number) => ('SES' + String(n).padStart(23, '0')).slice(0, 26);
 raw.prepare(`INSERT INTO sessions (id,profile_id,token_hash,expires_at) VALUES (?,?,?,?)`)

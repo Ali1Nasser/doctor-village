@@ -245,3 +245,23 @@ report_snapshots     (id, period_id, kind, payload_json, generated_at, supersede
 | `04_UX_SPEC.md` | `/finance` separates spendable funds from deposits/reserves; adds reconciliation freshness, pending-not-counted figure, and budget-vs-actual |
 | `CHECKPOINTS.md` | CP-5 gate becomes the accounting equation, not just the treasury subtraction |
 | `docs/OPEN_QUESTIONS.md` | Q14 (deposit treatment) and Q15 (accountant sign-off) added |
+
+
+---
+
+## ⚠️ Village map — restored 2026-08-08 from the v1.1 spec revision
+
+The pack's specification files are **v1.1 — village-map revision**; the copies this project was
+built from are v1.0 and omit every map paragraph, along with constraint **C13**, product goal 4 and
+`07_VILLAGE_MAP_SPEC.md`. Found by diffing the uploaded packs against this repo, twenty-seven
+sessions in (INSIGHTS 2026-08-08, R-084).
+
+**Village map:** building-level financial colour/status is another presentation of `UNIT_STATUS`,
+not a separate permission. It remains off until Q11/Q22 are approved. When enabled, it is computed
+only from posted journal data, never pending submissions, and shows text + icon with colour. The map
+never exposes names, phones, receipt images, notes, or private owner balances.
+
+**As implemented (2026-08-08):** no financial colour on the map at all. Q11 is undecided, so the
+building card shows either aggregate figures (when `unit_status_public` is on) or a sentence saying
+they are not published. The figures come from `v_unit_balance`, which reads posted journal lines
+only — a pending receipt contributes zero, which is the same rule `/finance` follows.

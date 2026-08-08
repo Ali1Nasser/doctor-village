@@ -25,7 +25,8 @@
  *   node tools/load-map-image.mjs --remote        (via wrangler, base64 chunks)
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { execFileSync } from 'node:child_process';
@@ -58,16 +59,22 @@ if (!target || target === '--help') {
 }
 
 if (target === '--remote') {
-  // wrangler takes SQL on the command line; a 109 KB blob goes in as a hex
-  // literal, which is 218 KB of argument — under the limit, and simpler than
-  // streaming.
+  // Via a FILE, not `--command`. A 109 KB blob is 218 KB as a hex literal, and
+  // an argument that size trips ARG_MAX on some shells and wrangler's own
+  // argument handling on others — it failed here before it worked.
   const hex = bytes.toString('hex');
-  const sql = `INSERT OR REPLACE INTO receipt_blobs (storage_key, mime, size_bytes, bytes)`
-    + ` VALUES ('${KEY}', 'image/webp', ${bytes.length}, X'${hex}')`;
-  execFileSync('npx', [
-    'wrangler', 'd1', 'execute', 'qaryat-atebaa-receipts',
-    '--remote', '--yes', '--command', sql,
-  ], { stdio: 'inherit' });
+  const sqlPath = join(tmpdir(), 'load-map-image.sql');
+  writeFileSync(sqlPath,
+    `INSERT OR REPLACE INTO receipt_blobs (storage_key, mime, size_bytes, bytes)\n`
+    + `VALUES ('${KEY}', 'image/webp', ${bytes.length}, X'${hex}');\n`);
+  try {
+    execFileSync('npx', [
+      'wrangler', 'd1', 'execute', 'qaryat-atebaa-receipts',
+      '--remote', '--yes', '--file', sqlPath,
+    ], { stdio: 'inherit' });
+  } finally {
+    rmSync(sqlPath, { force: true });
+  }
   console.log(`✓ uploaded ${bytes.length} bytes to ${KEY} (remote)`);
 } else {
   const db = new DatabaseSync(target);

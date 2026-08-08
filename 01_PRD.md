@@ -206,3 +206,26 @@ Passwords. Email login. Selling or sharing resident data.
 | Q8 | Domain name? | e.g. `qaryat-atebaa.com` — owner to register |
 | Q9 | Is there historical payment data to import from before launch? | import current-year only |
 | Q10 | Who is legally responsible for the data (data controller)? | the board, in writing |
+
+
+---
+
+## ⚠️ Village map — restored 2026-08-08 from the v1.1 spec revision
+
+The pack's specification files are **v1.1 — village-map revision**; the copies this project was
+built from are v1.0 and omit every map paragraph, along with constraint **C13**, product goal 4 and
+`07_VILLAGE_MAP_SPEC.md`. Found by diffing the uploaded packs against this repo, twenty-seven
+sessions in (INSIGHTS 2026-08-08, R-084).
+
+Restored below rather than by replacing the file, because these copies carry local amendments the
+pack does not have. `07_VILLAGE_MAP_SPEC.md` remains authoritative for the map.
+
+**D5.** كمالك، عايز أشوف خريطة القرية وأوصل لسجل عمارتي بسهولة.
+- The map is available to authenticated members from the home page and works on phone and desktop.
+- A resident can choose a building from both a visual hotspot and an accessible numbered list.
+- Every published hotspot links to an existing, board-verified building record; an image label never
+  creates a building or unit.
+- The page shows only permitted aggregate/public information and never exposes phone numbers,
+  receipt images, personal notes, or another resident's private balance.
+- The supplied image is clearly labelled as a partial guidance plan until the board verifies it.
+- Full acceptance and data rules are authoritative in `07_VILLAGE_MAP_SPEC.md`.

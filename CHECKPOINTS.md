@@ -358,8 +358,43 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 
 ---
 
+## CP-9 — Village navigation (C13)
+*Restored 2026-08-08. `07_VILLAGE_MAP_SPEC.md`, constraint C13 and product goal 4
+were absent from the spec copy this project was built from — found by diffing the
+uploaded packs against this repo, twenty-seven sessions in.*
+
+- [x] `migrations/0023_village_map.sql` — `map_documents`, `building_map_features`,
+      one published map at a time, coordinates normalised 0–10,000
+- [x] `/map` — the plan with an SVG hotspot overlay AND an equal building list
+      drawn from the register, so a building the drawing misses is still reachable
+- [x] `/buildings/:id` — aggregate only; per-building payment figures stay behind
+      `unit_status_public` (Q11) and render as "not published", never as zeros
+- [x] `/admin/map` — link a hotspot to a real building, verify it with a name and
+      a time, publish
+- [x] The plan ships in the Worker bundle (`src/map-asset.ts`). D1 refuses a
+      statement big enough to carry it — `SQLITE_TOOBIG`, found on the first real
+      upload — and R2 needs a card (ADR-015, C11)
+
+**Gates**
+- [x] ⭐ **C13 holds at the database:** a hotspot for a building that is not in the
+      register cannot be saved, and an unverified or unlinked one cannot be
+      published — asserted with the data layer bypassed, and verified firing on
+      real D1 on 2026-08-08
+- [x] The map reveals no phone number, no owner name, no receipt, no private
+      balance — asserted, not assumed
+- [x] Every hotspot is reachable without the image: 48px targets, `<title>` on
+      each SVG link, 0 axe violations at 360px
+- [ ] The board verifies the real hotspot positions on the ground. The demo's
+      coordinates were read off the photograph by eye and are marked verified
+      ONLY in the demo database — `trg_no_demo_*` makes them impossible to load
+      into production
+
+---
+
 ## CP-8 — Hardening & handover
-- [ ] Security review against `03_RBAC_AND_AUTH.md` §5 and the adversarial checklist
+- [~] Security review — the adversarial passes done so far are recorded as R-072…R-079.
+      This session closed the orphan-entry hole (0024) and the client-trusted EXIF claim;
+      a full pass against 03 §5 by a second pair of eyes has still not happened
 - [ ] Nightly D1 → R2 dump via Cron Trigger; weekly → private GitHub repo
 - [ ] Monthly export to a **Google Drive folder owned by the board, not the developer**
 - [ ] ⚠️ **Restore drill:** restore into a clean empty database and confirm the treasury total matches.

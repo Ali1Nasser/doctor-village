@@ -31,6 +31,7 @@ import * as adm from '../lib/db/admin.js';
 import * as approve from '../lib/db/approve.js';
 import * as vmap from '../lib/db/map.js';
 import * as mv from './views/map-pages.js';
+import { MAP_DISPLAY_KEY, MAP_DISPLAY_MIME, mapDisplayBytes } from './map-asset.js';
 import * as av from './views/admin-pages.js';
 import * as mutations from '../lib/db/mutations.js';
 import * as expenses from '../lib/db/expenses.js';
@@ -1839,8 +1840,21 @@ export function createApp(deps: AppDeps) {
    */
   app.get('/map/image/*', async c => {
     need(c);
-    const key = c.req.path.replace('/map/image/', '');
-    const obj = await deps.storage.get(decodeURIComponent(key));
+    const key = decodeURIComponent(c.req.path.replace('/map/image/', ''));
+
+    // The shipped plan comes from the bundle: D1 refuses a statement big enough
+    // to carry it (SQLITE_TOOBIG on a 218 KB hex literal) and R2 wants a card
+    // (ADR-015, C11). Any OTHER key — a map a future board uploads — still
+    // resolves through blob storage, so this is a fast path, not a special case.
+    if (key === MAP_DISPLAY_KEY) {
+      const bytes = mapDisplayBytes();
+      return c.body(bytes as unknown as ArrayBuffer, 200, {
+        'content-type': MAP_DISPLAY_MIME,
+        'cache-control': 'private, max-age=31536000, immutable',
+      });
+    }
+
+    const obj = await deps.storage.get(key);
     if (!obj) throw new data.NotFound('صورة الخريطة مش موجودة');
     return c.body(obj.body as unknown as ArrayBuffer, 200, {
       'content-type': obj.mime,

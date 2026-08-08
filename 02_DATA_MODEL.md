@@ -389,3 +389,23 @@ export const sum      = (xs: Piastres[]): Piastres => …
 No arithmetic on money happens anywhere except in this module. Unit-test it against:
 `0`, `1` piastre, `0.005` rounding, `999,999,999.99`, `"1,234.50"`, `"١٢٣٤"` (Arabic-Indic digits),
 `"1 234,50"`, `null`, `""`, `"abc"`, and a negative input.
+
+
+---
+
+## ⚠️ Village map — restored 2026-08-08 from the v1.1 spec revision
+
+The pack's specification files are **v1.1 — village-map revision**; the copies this project was
+built from are v1.0 and omit every map paragraph, along with constraint **C13**, product goal 4 and
+`07_VILLAGE_MAP_SPEC.md`. Found by diffing the uploaded packs against this repo, twenty-seven
+sessions in (INSIGHTS 2026-08-08, R-084).
+
+**Rule 7 (restored):** *A map label is never inventory. Buildings and units come only from a
+board-approved register.*
+
+**As implemented (2026-08-08):** `migrations/0023_village_map.sql`.
+`building_map_features.building_id` REFERENCES `buildings(id)`, so a hotspot for a building that is
+not in the register cannot be stored; `trg_map_publish_needs_verified_features` refuses publication
+while any hotspot is unlinked or unverified; `map_documents.status` is `draft | published |
+archived` with a partial unique index allowing exactly one published version. Coordinates are
+normalised integers 0–10,000, never pixels.

@@ -1060,3 +1060,41 @@ project's own CHECKPOINTS file could not see this: it ticks capabilities, and a 
 door is still a capability. **The check that catches it is "name the sequence of taps from the login
 screen"** — for onboarding 204 residents, for opening next year's subscription, for closing a month.
 If any step in that sentence is "type a URL", it is not built.
+
+**[2026-08-08] [agent] ⭐ The spec I was building from was not the spec.**
+Diffing the uploaded packs against this repo turned up `07_VILLAGE_MAP_SPEC.md`, constraint C13 and
+product goal FOUR — village navigation — none of which exist in `00_MASTER_PROMPT.md` here. Twenty-
+seven sessions against a truncated copy. Nothing in the process caught it: every checkpoint was met,
+every gate passed, and the missing goal left no hole to notice because a requirement that was never
+written down produces no failing test. The only thing that found it was comparing two copies of the
+source documents. **Diff the specification, not just the code, whenever a second copy exists** — and
+treat "the constraints are numbered C1…C12" as a fact to verify rather than a fact.
+
+**[2026-08-08] [agent] ⭐ The most important route in the product was a 404, and nothing noticed.**
+`/admin/review` rendered an «✅ اعتماد» button posting to `/admin/review/:id`, which did not exist.
+A board member could not accept a receipt from the deployed site. Underneath it was worse:
+`reviewPayment` links a `journalEntryId` its caller supplies and **nothing anywhere created one**, so
+no code path could post a payment at all. 377 access tests passed throughout, because every one of
+them called the data layer directly or posted the ledger by hand in a fixture.
+**A test that constructs the state it is asserting about cannot discover that the product cannot
+reach that state.** The check that finds this class of bug is: name the sequence of taps from the
+login screen to the outcome, then drive exactly that. Two of the three biggest defects in this
+project were found by asking it.
+
+**[2026-08-08] [design] A guard that is true finds its own violations, everywhere, at once.**
+Adding the orphan-entry trigger (0024) — "a posted entry that names a receipt must have that receipt
+pointing back at it" — immediately broke six test fixtures, the demo seed, `verify_ledger.py` and two
+real code paths. Every one of them was writing a state the application cannot reach: expenses posted
+before being attached, entries naming receipts that were never approved, an accounting equation
+proved over vouchers that did not exist. None of it was reachable through the product, so none of it
+was a live bug — but all of it was a fixture asserting something slightly untrue, which is how a
+suite stops testing the thing it names. **When a new constraint breaks a lot of fixtures, read them
+before relaxing it.**
+
+**[2026-08-08] [ops] The upload path is where storage assumptions actually get tested.**
+The map image went into D1 like every other image, and D1 refused: 109 KB is 218 KB as a hex literal
+and the statement exceeds its limit (`SQLITE_TOOBIG`). Chunked appends are not a workaround, because
+SQLite's `||` coerces blobs to text. R2 was already refused for wanting a card. The answer was to
+ship the plan in the Worker bundle — one file for the whole village, versioned with the release that
+drew hotspots on it. Same shape as the D1 `GLOB` limit found on 2026-08-07: **the platform's real
+limits appear on the first write of real data, never in review.**

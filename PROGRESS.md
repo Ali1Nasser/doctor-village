@@ -10,10 +10,39 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~600 checks green** (101 unit · 369 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · 33 screens rendered). Live on Cloudflare with all 22 migrations applied to real D1. |
-| **Last updated** | 2026-08-08 (session 27) |
+| **Status** | 🟢 **~640 checks green** (107 unit · 387 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · 37 screens · 0 WCAG violations). Live on Cloudflare with all 24 migrations applied to real D1. |
+| **Last updated** | 2026-08-08 (session 28) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 28 — the specification was not the specification
+
+The owner uploaded a zip of every earlier build and asked for a deep comparison. The comparison
+found something larger than a feature gap: **`07_VILLAGE_MAP_SPEC.md`, constraint C13 and product
+goal FOUR — village navigation — are in the v1.4 spec pack and absent from the copy this project
+was built from.** Twenty-seven sessions against a truncated specification. All seven spec files have
+now been diffed heading-by-heading; the map is the only divergence, and every paragraph of it is
+restored.
+
+Following the comparison rather than the code then turned up **the largest defect in the project**:
+`/admin/review` renders an «✅ اعتماد» button posting to `/admin/review/:id`, and that route did not
+exist. Worse, `reviewPayment` links a `journalEntryId` its caller supplies and **nothing anywhere
+created one** — so no code path could post a payment at all. The portal could display a year of
+accounts it had been handed and could not record one receipt. 377 access tests passed throughout,
+because every one of them either called the data layer directly or wrote the ledger by hand in a
+fixture.
+
+Built this session: the approval path (`lib/db/approve.ts` + the route), the orphan-entry guard
+(0024) which immediately exposed the same shortcut in six fixtures, the demo seed and
+`verify_ledger.py`, `/help` (a 404 behind the floating button on all 34 screens), and the village
+map — `/map`, `/buildings/:id`, `/admin/map`, with C13 enforced structurally.
+
+**The lesson to carry forward** is in INSIGHTS: a test that constructs the state it asserts about
+cannot discover that the product cannot reach that state. The check that finds this class of bug is
+to name the sequence of taps from the login screen and then drive exactly that. Two of the three
+biggest defects here were found by asking it.
+
+---
 
 ### What changed in session 27
 

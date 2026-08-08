@@ -233,3 +233,44 @@ Village photos routinely capture things nobody meant to publish.
 - Every number in the UI carries its unit: `ج.م` always visible.
 - Dates in Arabic with the Gregorian calendar: "12 يوليو 2026".
 - All strings live in `messages/ar.json`. Reading a hardcoded string in a component is a review failure.
+
+
+---
+
+## ⚠️ Village map — restored 2026-08-08 from the v1.1 spec revision
+
+The pack's specification files are **v1.1 — village-map revision**; the copies this project was
+built from are v1.0 and omit every map paragraph, along with constraint **C13**, product goal 4 and
+`07_VILLAGE_MAP_SPEC.md`. Found by diffing the uploaded packs against this repo, twenty-seven
+sessions in (INSIGHTS 2026-08-08, R-084).
+
+Restored below rather than by replacing the file, because these copies carry local amendments the
+pack does not have. `07_VILLAGE_MAP_SPEC.md` remains authoritative for the map.
+
+### 4.3 Resident uses the village map
+
+```
+[الرئيسية] → «خريطة القرية»
+  ↓
+[خريطة إرشادية + تنبيه إنها مش مخطط مساحي]
+  ↓                         ↘
+[اضغط منطقة موثقة]          [أو اختار رقم العمارة من قائمة كبيرة]
+  ↓
+[بطاقة العمارة: حالة الربط + المعلومات العامة المسموحة]
+  ↓
+«افتح سجل العمارة»
+```
+
+- The current supplied image is shown as **partial and unverified**, with the visually apparent
+  `14–46` range presented only as a preliminary selector until the board confirms it.
+- A resident never has to accurately tap a small building. Search/list selection is equally capable.
+- Hotspots are real 48×48 px minimum buttons with keyboard focus, Arabic labels, and a matching
+  text-only list.
+- On mobile, details appear below the map and receive focus. On desktop, map and details sit side by side.
+- The map has explicit zoom in/out/reset controls; pinch/wheel is enhancement only and never traps scrolling.
+- If the image is offline or blocked, the numbered list and authoritative building records still work.
+- No financial colour appears until the board approves Q11/Q22. If enabled later, every colour has
+  accompanying text and icon and uses approved ledger values only.
+- `07_VILLAGE_MAP_SPEC.md` is authoritative for data provenance, publication, privacy, and acceptance.
+
+## 5. Component states — every one is designed
