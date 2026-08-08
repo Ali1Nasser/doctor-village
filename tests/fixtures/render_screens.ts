@@ -56,6 +56,17 @@ const resident = raw.prepare(
      JOIN v_unit_balance ub ON ub.unit_id = uo.unit_id
     WHERE p.role='resident' AND ub.paid_piastres > 0 AND ub.outstanding_piastres > 0 LIMIT 1`
 ).get() as { id: string };
+// The village plan lives in the blob table like every other image (ADR-023).
+// `tools/load-map-image.mjs` verifies its checksum; here we only need the bytes
+// present so /map renders something other than a broken image.
+{
+  const bytes = readFileSync(join(ROOT, 'assets/maps/village-map-display.webp'));
+  raw.prepare(
+    `INSERT OR REPLACE INTO receipt_blobs (storage_key, mime, size_bytes, bytes)
+     VALUES (?,?,?,?)`
+  ).run('maps/village-map-2026-08-display.webp', 'image/webp', bytes.length, bytes);
+}
+
 const admin = raw.prepare(`SELECT id FROM profiles WHERE role='admin' LIMIT 1`).get() as { id: string };
 const sid = (n: number) => ('SES' + String(n).padStart(23, '0')).slice(0, 26);
 raw.prepare(`INSERT INTO sessions (id,profile_id,token_hash,expires_at) VALUES (?,?,?,?)`)
@@ -125,6 +136,9 @@ const SCREENS: [string, string, string][] = [
   ['audit',      '/admin/audit',      'tok-admin'],
   ['settlements','/admin/settlements','tok-admin'],
   ['help',       '/help',            'tok-res'],
+  ['map',        '/map',             'tok-res'],
+  ['building',   '/buildings/DEMOBLD0000000000000000009', 'tok-res'],
+  ['adminmap',   '/admin/map',       'tok-admin'],
   // The board's own home. `home` above is the resident's; an admin sees the
   // same page plus the board-tools card, and that card is the only route into
   // every /admin/* screen — so it gets rendered and looked at, not assumed.
@@ -134,11 +148,20 @@ const SCREENS: [string, string, string][] = [
 ];
 
 let failed = 0;
+/**
+ * The preview is static files opened with `file://`, so a `/map/image/...` src
+ * cannot resolve and the plan renders as a broken-image icon — which would make
+ * the one screen whose whole point is the picture the one screen the preview
+ * cannot show. Inlining it here keeps the rendered artefact honest.
+ */
+const MAP_DATA_URI = 'data:image/webp;base64,'
+  + readFileSync(join(ROOT, 'assets/maps/village-map-display.webp')).toString('base64');
+
 for (const [name, path, token] of SCREENS) {
   const headers = new Headers();
   if (token) headers.set('authorization', `Bearer ${token}`);
   const res = await app.request(path, { headers });
-  const body = await res.text();
+  const body = (await res.text()).replaceAll(/src="\/map\/image\/[^"]*"/g, `src="${MAP_DATA_URI}"`);
   const ok = res.status < 400 || name === 'notfound';
   if (!ok) { failed++; console.error(`  ✗ ${name} ${path} -> ${res.status}`); }
   writeFileSync(join(OUT, `${name}.html`), body, 'utf8');

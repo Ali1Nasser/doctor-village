@@ -29,6 +29,8 @@ import * as fees from '../lib/db/fees.js';
 import * as settle from '../lib/db/settlements.js';
 import * as adm from '../lib/db/admin.js';
 import * as approve from '../lib/db/approve.js';
+import * as vmap from '../lib/db/map.js';
+import * as mv from './views/map-pages.js';
 import * as av from './views/admin-pages.js';
 import * as mutations from '../lib/db/mutations.js';
 import * as expenses from '../lib/db/expenses.js';
@@ -294,6 +296,7 @@ export function createApp(deps: AppDeps) {
     add('user.assign_role', '/admin/users', '🛡️', _t.users.title);
     add('staff.read_names', '/admin/staff', '👷', _t.staffAdmin.title);
     add('audit.read', '/admin/audit', '📜', _t.auditView.title);
+    add('settings.edit', '/admin/map', '🗺️', _t.map.adminTitle);
     add('settings.edit', '/admin/settings', '⚙️', _t.settings.title);
     add('system.read_quota', '/admin/health', '📊', _t.health.title);
     return out;
@@ -1798,6 +1801,116 @@ export function createApp(deps: AppDeps) {
     const ctx = need(c);
     if (!can(ctx.role, 'audit.read')) throw new Forbidden('audit.read');
     return html(av.auditPage({ rows: await adm.auditFeed(ctx, deps.db) }));
+  });
+
+  /* ---- خريطة القرية (C13 / 07_VILLAGE_MAP_SPEC) -------------------------- */
+
+  /**
+   * Product goal FOUR, and it was invisible: `07_VILLAGE_MAP_SPEC.md` and
+   * constraint C13 are in the v1.4 spec pack and were absent from the copy this
+   * project was built from. Twenty-seven sessions against a truncated spec.
+   *
+   * The map is a navigation layer over the register and never a source of truth
+   * about it. Nothing in this section can create a building; a hotspot
+   * references `buildings(id)`, so a label for a building that does not exist
+   * is not representable, and an unverified one cannot be published.
+   *
+   * The image is served from D1 through the existing blob storage — no R2, no
+   * external tiles, no map SDK, no API key (C11 and C13 §5 agree here). It is
+   * immutable and addressed by its own hash, so it is cached hard.
+   */
+  app.get('/map', async c => {
+    const ctx = need(c);
+    const m = await vmap.publishedMap(ctx, deps.db);
+    return html(mv.mapPage({
+      map: m,
+      buildings: await vmap.buildingList(ctx, deps.db),
+      imageSrc: m ? `/map/image/${encodeURIComponent(m.display_storage_key)}` : '',
+    }));
+  });
+
+  /**
+   * The plan image itself.
+   *
+   * A member-only route rather than a public asset: the drawing shows the
+   * village layout, and C6's habit — no public object URLs, ownership checked
+   * per request — is worth keeping even for something this mild. It is
+   * immutable, so it is cached for a year; a new version is a new key.
+   */
+  app.get('/map/image/*', async c => {
+    need(c);
+    const key = c.req.path.replace('/map/image/', '');
+    const obj = await deps.storage.get(decodeURIComponent(key));
+    if (!obj) throw new data.NotFound('صورة الخريطة مش موجودة');
+    return c.body(obj.body as unknown as ArrayBuffer, 200, {
+      'content-type': obj.mime,
+      'cache-control': 'private, max-age=31536000, immutable',
+    });
+  });
+
+  app.get('/buildings/:id', async c => {
+    const ctx = need(c);
+    const id = c.req.param('id');
+    return html(mv.buildingPage({
+      b: await vmap.buildingSummary(ctx, deps.db, id as never),
+      work: await vmap.buildingWork(ctx, deps.db, id as never),
+    }));
+  });
+
+  const adminMapScreen = async (
+    ctx: AuthContext, selectedId?: string, flash?: string, error?: string,
+  ) => {
+    const maps = await vmap.listMaps(ctx, deps.db);
+    const chosen = selectedId ?? maps.find(m => m.status === 'draft')?.id;
+    const selected = chosen
+      ? { id: chosen, features: await vmap.mapFeatures(ctx, deps.db, chosen as never) }
+      : undefined;
+    const doc = maps.find(m => m.id === chosen);
+    return mv.adminMapPage({
+      maps, selected,
+      buildings: await vmap.buildingList(ctx, deps.db),
+      imageSrc: doc ? `/map/image/${encodeURIComponent(await vmap.displayKey(ctx, deps.db, doc.id as never))}` : '',
+      flash, error,
+    });
+  };
+
+  app.get('/admin/map', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'settings.edit')) throw new Forbidden('settings.edit');
+    return html(await adminMapScreen(ctx, c.req.query('id')));
+  });
+
+  app.post('/admin/map/features/:id/verify', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'settings.edit')) throw new Forbidden('settings.edit');
+    const f = await c.req.parseBody();
+    try {
+      await vmap.verifyFeature(ctx, deps.db, c.req.param('id') as never,
+        (String(f['building'] ?? '') || null) as never, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await adminMapScreen(ctx, undefined, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return c.redirect('/admin/map', 303);
+  });
+
+  app.post('/admin/map/features/:id/reject', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'settings.edit')) throw new Forbidden('settings.edit');
+    await vmap.rejectFeature(ctx, deps.db, c.req.param('id') as never, deps.now);
+    return c.redirect('/admin/map', 303);
+  });
+
+  app.post('/admin/map/:id/publish', async c => {
+    const ctx = need(c);
+    if (!can(ctx.role, 'settings.edit')) throw new Forbidden('settings.edit');
+    try {
+      await vmap.publishMap(ctx, deps.db, c.req.param('id') as never, deps.now);
+    } catch (e) {
+      if (e instanceof LedgerRefused) return html(await adminMapScreen(ctx, undefined, undefined, e.reasonAr), 409);
+      throw e;
+    }
+    return html(await adminMapScreen(ctx, undefined, _t.map.publishedOk));
   });
 
   /* ---- /help — the button on every screen -------------------------------- */

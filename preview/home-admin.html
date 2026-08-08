@@ -218,6 +218,29 @@ nav.bottom .ico{font-size:1.2rem}
 .table-wrap table{min-inline-size:520px}
 .field.check label{display:flex;align-items:flex-start;gap:10px;font-weight:600;cursor:pointer}
 .field.check input{inline-size:22px;block-size:22px;flex:none;margin-block-start:2px}
+/* ---- the village map (C13 / 07_VILLAGE_MAP_SPEC) -------------------------
+   The overlay is an inline SVG on a viewBox of 0 0 10000 10000 with
+   preserveAspectRatio="none", stretched over the image. That is what lets the
+   database store unitless coordinates and the browser do every conversion —
+   pixels would be correct at exactly one screen width. */
+.map-wrap{position:relative;inline-size:100%;line-height:0;border-radius:var(--radius);
+  overflow:hidden;background:var(--surface-2)}
+.map-img{inline-size:100%;block-size:auto;display:block}
+.map-svg{position:absolute;inset:0;inline-size:100%;block-size:100%}
+.map-svg .hot rect{fill:var(--brand);fill-opacity:.13;stroke:var(--brand);
+  stroke-width:40;stroke-opacity:.75;transition:fill-opacity .12s}
+.map-svg .hot:hover rect,.map-svg .hot:focus rect{fill-opacity:.42}
+.map-svg .hot:focus{outline:none}
+.map-svg .hot:focus rect{stroke-width:110;stroke-opacity:1}
+/* The equal, non-visual path. 48px targets with 8px gaps, per 04_UX_SPEC §1 —
+   a fingertip on a polygon is the interaction most likely to fail here. */
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.bnum{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  min-block-size:64px;padding:8px 6px;border-radius:12px;background:var(--surface-2);
+  border:1px solid var(--border);color:var(--ink);text-decoration:none}
+.bnum:hover,.bnum:focus-visible{background:var(--brand-soft);border-color:var(--brand)}
+.bnum .bcode{font-size:1.2rem;font-weight:700}
+.bnum .bmeta{font-size:.72rem;color:var(--ink-muted);text-align:center}
 .backlink{display:inline-flex;align-items:center;min-block-size:var(--tap);
   color:var(--brand);text-decoration:none;font-weight:600;margin-block-end:8px}
 .prose{line-height:1.85}
@@ -345,6 +368,19 @@ header .htext{flex:1;min-inline-size:0}
   <a class="btn btn-2" href="/payments">شوف إيصالاتي</a>
 </div>
 
+<!-- 07_VILLAGE_MAP_SPEC §4: "a prominent «خريطة القرية» card on the home page.
+     It does not consume a fifth bottom-navigation slot." The five tabs are the
+     resident's daily routes; the map is a place you go once, when a delivery
+     driver is on the phone asking which building. -->
+<a class="row row-link card" href="/map" style="display:flex;margin-block-end:14px">
+  <span class="ico" aria-hidden="true">🗺️</span>
+  <span class="row-body">
+    <b>خريطة القرية</b>
+    <span class="muted">شوف العمارات على الخريطة، أو اختار رقم العمارة من القايمة</span>
+  </span>
+  <span class="row-end" aria-hidden="true">←</span>
+</a>
+
 <h2>فلوس القرية</h2>
 <div class="tiles">
   <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
@@ -407,6 +443,10 @@ header .htext{flex:1;min-inline-size:0}
     </a>
     <a class="tool" href="/admin/audit">
       <span class="ico" aria-hidden="true">📜</span>سجل التغييرات
+      <span class="go" aria-hidden="true">←</span>
+    </a>
+    <a class="tool" href="/admin/map">
+      <span class="ico" aria-hidden="true">🗺️</span>إدارة الخريطة
       <span class="go" aria-hidden="true">←</span>
     </a>
     <a class="tool" href="/admin/settings">

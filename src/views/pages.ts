@@ -146,6 +146,19 @@ ${d.pinned ? `<div class="banner info"><strong>📌 ${esc(d.pinned.title)}</stro
   <a class="btn btn-2" href="/payments">${esc(t.home.seeMyReceipts)}</a>
 </div>
 
+<!-- 07_VILLAGE_MAP_SPEC §4: "a prominent «خريطة القرية» card on the home page.
+     It does not consume a fifth bottom-navigation slot." The five tabs are the
+     resident's daily routes; the map is a place you go once, when a delivery
+     driver is on the phone asking which building. -->
+<a class="row row-link card" href="/map" style="display:flex;margin-block-end:14px">
+  <span class="ico" aria-hidden="true">🗺️</span>
+  <span class="row-body">
+    <b>${esc(t.map.cardTitle)}</b>
+    <span class="muted">${esc(t.map.cardHint)}</span>
+  </span>
+  <span class="row-end" aria-hidden="true">←</span>
+</a>
+
 <h2>${esc(t.home.villageMoney)}</h2>
 <div class="tiles">
   <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">

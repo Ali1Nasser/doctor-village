@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>إدارة المحتوى — بوابة قرية الأطباء</title>
+<title>عمارة 22 — بوابة قرية الأطباء</title>
 <style>
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
@@ -327,13 +327,13 @@ header .htext{flex:1;min-inline-size:0}
   <div class="hctl">
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="fs">
-      <input type="hidden" name="next" value="/admin/content">
+      <input type="hidden" name="next" value="/buildings/DEMOBLD0000000000000000009">
       <button type="submit" aria-label="حجم الخط"
               title="حجم الخط"><span aria-hidden="true">A</span></button>
     </form>
     <form method="post" action="/prefs">
       <input type="hidden" name="cycle" value="theme">
-      <input type="hidden" name="next" value="/admin/content">
+      <input type="hidden" name="next" value="/buildings/DEMOBLD0000000000000000009">
       <button type="submit" aria-label="الوضع الليلي أو النهاري"
               title="الوضع الليلي أو النهاري">◐</button>
     </form>
@@ -342,10 +342,10 @@ header .htext{flex:1;min-inline-size:0}
 <div class="shell">
 
 <nav class="bottom" aria-label="القائمة">
-  <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
+  <a href="/" aria-current="page"><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>
   <a href="/payments" ><span class="ico" aria-hidden="true">🧾</span>إيصالاتي</a>
   <a href="/finance" ><span class="ico" aria-hidden="true">💰</span>فلوس القرية</a>
-  <a href="/news" aria-current="page"><span class="ico" aria-hidden="true">📰</span>أخبار</a>
+  <a href="/news" ><span class="ico" aria-hidden="true">📰</span>أخبار</a>
   <a href="/notifications" ><span class="ico" aria-hidden="true">📬</span>رسايلي</a>
 </nav>
 <a class="fab" href="/help">💬 محتاج مساعدة؟</a>
@@ -354,173 +354,28 @@ header .htext{flex:1;min-inline-size:0}
 
 <div id="js-msg" class="banner warn" hidden role="alert" aria-live="polite"></div>
 
+<a class="backlink" href="/map">← رجوع للخريطة</a>
+
 <div class="card">
-  <h2 style="margin-block-start:0">✍️ أخبار القرية</h2>
-  
-  <form method="post" action="/admin/content">
-    <div class="field">
-      <label for="pt">الكل</label>
-      <select id="pt" name="type" required>
-        <option value="announcement">إعلانات</option>
-        <option value="news">أخبار</option>
-        
-        <option value="decision">قرارات المجلس</option>
-        <option value="minutes">محاضر الاجتماعات</option>
-      </select>
+  <h2 style="margin-block-start:0">🏢 عمارة 22</h2>
+  <p class="muted">عمارة 22</p>
+  <div class="tiles">
+    <div class="tile" style="--tc:var(--brand);--tsoft:var(--brand-soft)">
+      <div class="lbl">عدد الوحدات</div>
+      <div class="v"><bdi dir="ltr" class="num">6</bdi></div>
     </div>
-    <div class="field">
-      <label for="ptitle">المشكلة في إيه؟</label>
-      <input id="ptitle" name="title" required maxlength="160">
+    
+    <div class="tile" style="--tc:var(--ok);--tsoft:var(--ok-soft)">
+      <div class="lbl">المحصّل</div>
+      <div class="v"><bdi dir="ltr" class="num">26,500.00</bdi> <span class="cur">ج.م</span></div>
     </div>
-    <div class="field">
-      <label for="pbody">تفاصيل زيادة (اختياري)</label>
-      <textarea id="pbody" name="body" rows="6" maxlength="8000"></textarea>
-    </div>
-    <label class="check">
-      <input type="checkbox" name="pin" value="1"> مثبّت
-    </label>
-    <button class="btn" type="submit">📣 انشر</button>
-  </form>
+  </div>
+  <p class="muted">المتبقي: <bdi dir="ltr" class="num">9,500.00</bdi> <span class="cur">ج.م</span></p>
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0">الكل</h3>
-  
-  <div class="row">
-    <span class="ico" aria-hidden="true">📣</span>
-    <span class="row-body">
-      <b>اجتماع الجمعية العمومية — 21 أغسطس</b>
-      <span class="muted"><bdi dir="ltr" class="num">18</bdi> يوليو <bdi dir="ltr" class="num">2026</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000009/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="0">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌✕
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📰</span>
-    <span class="row-body">
-      <b>بدء أعمال ترميم السور</b>
-      <span class="muted"><bdi dir="ltr" class="num">10</bdi> أبريل <bdi dir="ltr" class="num">2026</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000008/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📄</span>
-    <span class="row-body">
-      <b>محضر اجتماع الجمعية العمومية — مارس 2026</b>
-      <span class="muted"><bdi dir="ltr" class="num">10</bdi> مارس <bdi dir="ltr" class="num">2026</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000007/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📋</span>
-    <span class="row-body">
-      <b>قرار مجلس الإدارة رقم 1 لسنة 2026</b>
-      <span class="muted"><bdi dir="ltr" class="num">10</bdi> فبراير <bdi dir="ltr" class="num">2026</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000006/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📣</span>
-    <span class="row-body">
-      <b>تجهيزات الموسم الصيفي 2026</b>
-      <span class="muted"><bdi dir="ltr" class="num">10</bdi> يناير <bdi dir="ltr" class="num">2026</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000005/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📋</span>
-    <span class="row-body">
-      <b>قرار رقم 7 لسنة 2025 — التعاقد مع شركة نظافة</b>
-      <span class="muted"><bdi dir="ltr" class="num">2</bdi> نوفمبر <bdi dir="ltr" class="num">2025</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000004/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📰</span>
-    <span class="row-body">
-      <b>تجديد حمام السباحة</b>
-      <span class="muted"><bdi dir="ltr" class="num">20</bdi> مايو <bdi dir="ltr" class="num">2025</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000003/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📄</span>
-    <span class="row-body">
-      <b>محضر الجمعية العمومية — أغسطس 2024</b>
-      <span class="muted"><bdi dir="ltr" class="num">4</bdi> أغسطس <bdi dir="ltr" class="num">2024</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000002/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
-  <div class="row">
-    <span class="ico" aria-hidden="true">📋</span>
-    <span class="row-body">
-      <b>قرار تأسيس مجلس الإدارة الأول</b>
-      <span class="muted"><bdi dir="ltr" class="num">12</bdi> مارس <bdi dir="ltr" class="num">2024</bdi></span>
-    </span>
-    <span class="row-end">
-      <form method="post" action="/admin/content/DEMOPST0000000000000000001/pin" class="inline-form">
-        <input type="hidden" name="pinned" value="1">
-        <button class="btn btn-2 btn-sm" type="submit">
-          📌
-        </button>
-      </form>
-    </span>
-  </div>
+  <h3 style="margin-block-start:0">🔧 شغل صيانة منشور</h3>
+  <div class="empty"><div class="big" aria-hidden="true">🧰</div><p>مفيش شغل منشور على العمارة دي</p><p class="muted">أول ما المجلس ينشر خبر أو قرار هيظهر هنا على طول.</p></div>
 </div>
 </main>
 </div>

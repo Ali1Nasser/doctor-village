@@ -170,6 +170,20 @@ BEGIN
 END;
 
 -- -----------------------------------------------------------------------------
+-- Albums gain a building.
+--
+-- Spec §4 wants the selection panel to show "the latest public maintenance
+-- item" for the building somebody just tapped, and `albums` had no way to say
+-- which building an album was about. Nullable, because most albums are about
+-- the village rather than one block — a pool repair belongs to everybody.
+--
+-- This is the map paying its way: without it, tapping a building yields a name
+-- and a flat count, which a resident already knew.
+-- -----------------------------------------------------------------------------
+ALTER TABLE albums ADD COLUMN building_id TEXT REFERENCES buildings(id);
+CREATE INDEX idx_albums_building ON albums(building_id) WHERE building_id IS NOT NULL;
+
+-- -----------------------------------------------------------------------------
 -- What a resident sees: the published map, verified hotspots only.
 -- -----------------------------------------------------------------------------
 CREATE VIEW v_published_map AS

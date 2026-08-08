@@ -448,6 +448,59 @@ for n, (month, kind, amount, desc, vendor) in enumerate(EXPENSES, start=1):
     P(f"UPDATE expenses SET status='posted', journal_entry_id={q(ex_eid)} WHERE id={q(eid_x)};")
     P(ex_post)
 
+# ======================================================= village map ======
+# C13 / 07_VILLAGE_MAP_SPEC.md. The drawing is the owner's own photographed
+# brochure plan; `assets/maps/village-map-manifest.json` records its checksums
+# and states plainly that it is cropped and partial.
+#
+# ⚠️ The hotspot coordinates below were read off the image by eye, in the
+# normalised 0–10,000 space. That is exactly the status the spec assigns them:
+# a visual reference awaiting board verification on the ground. They are marked
+# `board_verified` HERE ONLY because this is the demo database — the whole
+# point of the demo is to show the workflow after the board has done its part,
+# and `trg_no_demo_*` (0006) makes these rows impossible to load into a
+# production database.
+#
+# Buildings the drawing does not clearly show are simply absent. They still
+# appear in the register list on /map, marked «مش على الخريطة», which is the
+# honest rendering of partial coverage — and the reason C13 forbids inventing
+# a building from a label nobody could read.
+MAP_ID = did("MAP", 1)
+MAP_SOURCE_SHA = "5300a7c1c04f1bc5c0c5f438fdc18a3331c7a18c70cb9100e0e4ab818601742e"
+MAP_DISPLAY_SHA = "7794b99dd3638418f38141ec600e37362795e73f3a09903e697ff50f832ceb21"
+MAP_DISPLAY_KEY = "maps/village-map-2026-08-display.webp"
+
+# (building code, centre x, centre y) in the 0–10,000 space
+MAP_POINTS = [
+    (14, 9625, 7453), (15, 7833, 7478), (16, 8233, 7169), (17, 8642, 6826),
+    (18, 8858, 6458), (19, 6833, 7520), (21, 6358, 6809), (22, 5942, 6500),
+    (23, 5417, 6918), (24, 5233, 6517), (25, 4750, 7662), (26, 4417, 7336),
+    (27, 4058, 7018), (28, 3642, 6785), (29, 3300, 6433), (30, 2875, 7420),
+    (31, 2583, 7043), (32, 2083, 7420), (33, 1900, 7102), (34, 1358, 6784),
+    (35, 1900, 6534), (36, 1192, 6534), (40,  400, 6558), (41,  400, 7035),
+    (43,  400, 7420), (45,  600, 7620),
+]
+BOX_W, BOX_H = 500, 420
+
+K = lines_content.append   # the map rides with the content file
+K("\n-- ------------------------------------------------ village map (C13) ---")
+K(f"INSERT INTO map_documents (id, title_ar, source_storage_key, display_storage_key, "
+  f"source_sha256, display_sha256, version_label, coverage_note_ar, status, created_by, "
+  f"published_by, published_at) VALUES ({q(MAP_ID)},'الموقع العام — قرية الأطباء',"
+  f"'maps/village-map-2026-08-source.jpg',{q(MAP_DISPLAY_KEY)},"
+  f"{q(MAP_SOURCE_SHA)},{q(MAP_DISPLAY_SHA)},'2026-08',"
+  f"'الخريطة دي جزء من القرية مش كلها — العمارات الظاهرة فيها من 14 لـ 46 تقريبًا، "
+  f"وباقي العمارات موجودة في القايمة تحت.','published',{q(DEV)},{q(CHAIR)},"
+  f"'2026-08-08T09:00:00Z');")
+
+for n, (code, cx, cy) in enumerate(MAP_POINTS, start=1):
+    b_index = code - 13          # BUILDINGS starts at 14 -> did('BLD', 1)
+    K(f"INSERT INTO building_map_features (id, map_document_id, building_id, label_ar, "
+      f"x, y, w, h, verification_status, verified_by, verified_at, sort_order) VALUES "
+      f"({q(did('MPF', n))},{q(MAP_ID)},{q(did('BLD', b_index))},{q(str(code))},"
+      f"{cx - BOX_W // 2},{cy - BOX_H // 2},{BOX_W},{BOX_H},"
+      f"'board_verified',{q(CHAIR)},'2026-08-08T08:00:00Z',{n * 10});")
+
 # ==================================================== staff & content =====
 K = lines_content.append
 K(HEADER)

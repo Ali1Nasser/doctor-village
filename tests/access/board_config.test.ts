@@ -30,6 +30,7 @@ import { setTokenHasher, resolveAuthContext } from '../../lib/db/index.js';
 import * as fees from '../../lib/db/fees.js';
 import * as adm from '../../lib/db/admin.js';
 import * as mut from '../../lib/db/mutations.js';
+import * as vmap from '../../lib/db/map.js';
 import { createApp } from '../../src/app.js';
 import { D1BlobStorage } from '../../lib/storage/d1blob.js';
 import type { AuthContext } from '../../types/domain.js';
@@ -41,7 +42,7 @@ const id = (p: string, n: number) => (p + String(n).padStart(26 - p.length, '0')
 
 const ADMIN = id('PRF', 1), ADMIN2 = id('PRF', 2), OP = id('PRF', 3);
 const REVIEWER = id('PRF', 4), RES = id('PRF', 5), DEV = id('PRF', 6);
-const BLD = id('BLD', 1), YEAR = id('FPR', 1);
+const BLD = id('BLD', 1), BLD2 = id('BLD', 2), YEAR = id('FPR', 1);
 const RP = { id: 'localhost', name: 'قرية الأطباء', origin: 'http://localhost' };
 const NOW = () => '2026-08-07T10:00:00Z';
 
@@ -70,6 +71,7 @@ before(async () => {
   x(`INSERT INTO profiles (id,full_name,role) VALUES (?,?,?)`, DEV, 'المبرمج', 'developer');
 
   x(`INSERT INTO buildings (id,code,name_ar,sort_order) VALUES (?,?,?,?)`, BLD, '5', 'عمارة 5', 5);
+  x(`INSERT INTO buildings (id,code,name_ar,sort_order) VALUES (?,?,?,?)`, BLD2, '6', 'عمارة 6', 6);
   for (let i = 1; i <= UNIT_COUNT; i++) {
     // Half the flats have a recorded area; the other half do not. That is not
     // tidy test data, it is the real state of a village register, and it is
@@ -512,5 +514,127 @@ describe('⭐ approving a receipt posts real money', () => {
       { status: string }).status, 'rejected');
     assert.equal((raw.prepare(`SELECT COUNT(*) n FROM journal_entries`).get() as { n: number }).n,
       before, 'a rejection moved the ledger');
+  });
+});
+
+/* ================================================================== */
+/**
+ * ⭐ C13 — the village map is a navigation layer, never a data source.
+ *
+ * `07_VILLAGE_MAP_SPEC.md` and constraint C13 are in the v1.4 spec pack and
+ * were absent from the copy this project was built from; village navigation is
+ * product goal FOUR and had no code at all. These tests assert the one rule the
+ * whole feature exists to protect:
+ *
+ *   > "Never create production `buildings` or `units` rows from image labels."
+ *
+ * The drawing shows labels 14–46. That is a photograph of a brochure, not a
+ * register, and buildings 1–13 are not established by it at all.
+ */
+describe('⭐ the map cannot invent a building (C13)', () => {
+  const MAP = id('MAP', 1);
+  let f1 = '', f2 = '';
+
+  before(() => {
+    const x = (s: string, ...p: unknown[]) => raw.prepare(s).run(...p as never[]);
+    x(`INSERT INTO map_documents (id,title_ar,source_storage_key,display_storage_key,
+         source_sha256,display_sha256,version_label,coverage_note_ar,status,created_by)
+       VALUES (?,?,?,?,?,?,?,?, 'draft', ?)`,
+      MAP, 'الموقع العام', 'maps/s.jpg', 'maps/d.webp',
+      'a'.repeat(64), 'b'.repeat(64), 'v1',
+      'الخريطة دي جزء من القرية مش كلها', ADMIN);
+  });
+
+  it('a hotspot for a building that is not in the register cannot be saved', async () => {
+    await assert.rejects(
+      () => vmap.addFeature(admin, db, MAP as never, {
+        labelAr: '46', x: 100, y: 100, w: 400, h: 400,
+        buildingId: id('BLD', 999) as never,
+      }),
+      /FOREIGN KEY|constraint|مرفوض|العملية/,
+      'a label brought a building into existence');
+  });
+
+  it('coordinates outside 0–10,000 are refused', async () => {
+    await assert.rejects(() => vmap.addFeature(admin, db, MAP as never, {
+      labelAr: '5', x: 20000, y: 0, w: 10, h: 10,
+    }), /الإحداثي/);
+  });
+
+  it('an UNLINKED hotspot can be drafted — that is what a draft is for', async () => {
+    f1 = await vmap.addFeature(admin, db, MAP as never,
+      { labelAr: '5', x: 1000, y: 1000, w: 500, h: 400 });
+    f2 = await vmap.addFeature(admin, db, MAP as never,
+      { labelAr: '14', x: 3000, y: 3000, w: 500, h: 400, buildingId: BLD as never });
+    assert.equal((await vmap.mapFeatures(admin, db, MAP as never)).length, 2);
+  });
+
+  it('⭐ publishing with an unverified hotspot is refused BY THE DATABASE', async () => {
+    await assert.rejects(() => vmap.publishMap(admin, db, MAP as never, NOW),
+      /مش متأكد|مربوطة/, 'an unverified hotspot reached residents');
+    // and with the data layer bypassed entirely (ADR-024)
+    assert.throws(() => raw.prepare(`UPDATE map_documents SET status='published',
+      published_by=?, published_at=? WHERE id=?`).run(ADMIN, '2026-08-08T10:00:00Z', MAP),
+      /مش متأكد|مربوطة/);
+  });
+
+  it('verifying refuses a building that does not exist, in Arabic', async () => {
+    await assert.rejects(
+      () => vmap.verifyFeature(admin, db, f1 as never, id('BLD', 888) as never, NOW),
+      /مش موجودة في السجل/,
+      'the map was allowed to point at a building nobody has');
+  });
+
+  it('a verification carries a name and a time', async () => {
+    await vmap.verifyFeature(admin, db, f2 as never, BLD as never, NOW);
+    const r = raw.prepare(
+      `SELECT verification_status, verified_by, verified_at FROM building_map_features WHERE id=?`)
+      .get(f2) as { verification_status: string; verified_by: string; verified_at: string };
+    assert.equal(r.verification_status, 'board_verified');
+    assert.equal(r.verified_by, ADMIN);
+    assert.ok(r.verified_at, 'a verification with no timestamp is not a verification');
+  });
+
+  it('⭐ it publishes only once EVERY hotspot is verified, and then freezes', async () => {
+    // f1 is still unverified: still refused.
+    await assert.rejects(() => vmap.publishMap(admin, db, MAP as never, NOW), /مش متأكد|مربوطة/);
+
+    await vmap.verifyFeature(admin, db, f1 as never, BLD2 as never, NOW);
+    await vmap.publishMap(admin, db, MAP as never, NOW);
+
+    const m = await vmap.publishedMap(reviewer, db);
+    assert.ok(m, 'a published map is not visible to a member');
+    assert.equal(m!.features.length, 2);
+
+    // Frozen: moving a hotspot residents already navigate by needs a new version.
+    assert.throws(() => raw.prepare(`UPDATE building_map_features SET x = 9000 WHERE id=?`)
+      .run(f2), /منشورة/, 'a published hotspot was moved under the residents');
+    // ...and the source image can never be swapped.
+    assert.throws(() => raw.prepare(`UPDATE map_documents SET source_sha256=? WHERE id=?`)
+      .run('c'.repeat(64), MAP), /الأصلية/);
+  });
+
+  it('the building list comes from the REGISTER, and says what the map misses', async () => {
+    const list = await vmap.buildingList(reviewer, db);
+    assert.ok(list.length >= 1);
+    // BLD and BLD2 are on the map; anything else in the register is not, and
+    // still has to be reachable — that is the honest rendering of partial cover.
+    assert.ok(list.some(b => b.on_map === 1), 'nothing is marked as on the map');
+  });
+
+  it('⭐ the map does not become a new route to private data (spec §3.6)', async () => {
+    const s = await vmap.buildingSummary(reviewer, db, BLD as never);
+    assert.equal(s.collected_piastres, null,
+      'per-building payment figures were published without the assembly deciding to');
+    const body = JSON.stringify(s) + JSON.stringify(await vmap.buildingWork(reviewer, db, BLD as never));
+    assert.ok(!/\+20/.test(body), 'a phone number reached the map');
+    assert.ok(!/سعاد|ليلى/.test(body), "a resident's name reached the map");
+  });
+
+  it('a resident reaches /map and /buildings/:id; the admin screen is closed to them', async () => {
+    assert.equal((await req('/map', 'tok-res')).status, 200);
+    assert.equal((await req(`/buildings/${BLD}`, 'tok-res')).status, 200);
+    assert.equal((await req('/admin/map', 'tok-res')).status, 403);
+    assert.equal((await req('/admin/map', 'tok-admin')).status, 200);
   });
 });
