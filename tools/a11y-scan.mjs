@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tools/a11y-scan.mjs — run axe-core over every rendered screen, at 360px.
+ * tools/a11y-scan.mjs — run axe-core over every rendered screen, narrow and wide.
  *
  * CP-7's gate says "WCAG 2.2 AA review with no unresolved blocker". A human
  * review is still the gate; this is the part a machine can hold, so that the
@@ -36,7 +36,17 @@ import { createRequire } from 'node:module';
 
 const require_ = createRequire(import.meta.url);
 const PREVIEW = join(process.cwd(), 'preview');
-const WIDTH = 360;   // 04_UX_SPEC's floor: it must work on the narrowest phone
+/**
+ * Two viewports, because ≥900px is not the same page.
+ *
+ * At that width the shell swaps its whole navigation — the bottom tab bar and
+ * the ☰ drawer stand down and a permanent rail takes over — so scanning only
+ * 360px left an entire second layout unchecked. It is also the layout a board
+ * member is most likely to open the portal in.
+ *
+ * 360 is 04_UX_SPEC's floor: it must work on the narrowest phone.
+ */
+const WIDTHS = [360, 1100];
 
 function skip(why) {
   console.log(`\n  a11y scan SKIPPED — ${why}`);
@@ -61,23 +71,27 @@ const exe = ['/opt/pw-browsers/chromium'].find(existsSync);
 const browser = await chromium.launch(exe ? { executablePath: exe } : {});
 
 const found = new Map();
-for (const file of pages) {
-  const page = await browser.newPage({ viewport: { width: WIDTH, height: 800 } });
-  await page.goto('file://' + join(PREVIEW, file));
-  await page.addScriptTag({ content: AXE });
-  const res = await page.evaluate(async () => window.axe.run(document, {
-    runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
-  }));
-  for (const v of res.violations) {
-    const key = `${v.id} (${v.impact})`;
-    if (!found.has(key)) found.set(key, { help: v.help, screens: [], sample: v.nodes[0]?.html ?? '' });
-    found.get(key).screens.push(file.replace(/\.html$/, ''));
+for (const width of WIDTHS) {
+  for (const file of pages) {
+    const page = await browser.newPage({ viewport: { width, height: 800 } });
+    await page.goto('file://' + join(PREVIEW, file));
+    await page.addScriptTag({ content: AXE });
+    const res = await page.evaluate(async () => window.axe.run(document, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+    }));
+    for (const v of res.violations) {
+      const key = `${v.id} (${v.impact})`;
+      if (!found.has(key)) found.set(key, { help: v.help, screens: [], sample: v.nodes[0]?.html ?? '' });
+      // The width is part of the location: "it fails on the audit screen" is
+      // half an answer when one of the two layouts is fine.
+      found.get(key).screens.push(`${file.replace(/\.html$/, '')}@${width}`);
+    }
+    await page.close();
   }
-  await page.close();
 }
 await browser.close();
 
-console.log(`\n  axe-core · WCAG 2.2 AA · ${pages.length} screens at ${WIDTH}px\n`);
+console.log(`\n  axe-core · WCAG 2.2 AA · ${pages.length} screens at ${WIDTHS.join('px and ')}px\n`);
 if (found.size === 0) {
   console.log('  PASS  no violations\n');
   process.exit(0);

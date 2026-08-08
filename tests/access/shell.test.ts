@@ -124,6 +124,35 @@ test('an admin sees every board destination in the drawer, and a resident none',
   }
 });
 
+/**
+ * The wide layout has its own navigation, and it was a different menu.
+ *
+ * At ≥900px `nav.bottom` used to become the sidebar — so a board member on a
+ * tablet got the five RESIDENT tabs as their whole rail, with the other
+ * twenty-four destinations behind a ☰ nobody looks for beside a sidebar. That
+ * is the branch the owner photographed, and no phone screenshot shows it.
+ *
+ * Both shells are now built from one `menuBody`, which is what this asserts:
+ * not that the sidebar exists, but that it carries the SAME links as the
+ * drawer. A second copy that merely exists is how they drifted the first time.
+ */
+test('the wide layout gets the whole menu, not the five phone tabs', async () => {
+  const html = await (await req('/', 'tok-admin')).text();
+
+  const aside = html.slice(html.indexOf('<aside class="side">'),
+                           html.indexOf('</aside>'));
+  assert.ok(aside.length > 0, 'there is no wide-layout sidebar at all');
+
+  const hrefs = (s: string) => [...s.matchAll(/href="([^"]+)"/g)].map(m => m[1]).sort();
+  const panel = html.slice(html.indexOf('<nav class="drawer-panel"'),
+                           html.indexOf('</details>'));
+  assert.deepEqual(hrefs(aside), hrefs(panel),
+    'the sidebar and the drawer are showing different menus');
+
+  assert.match(aside, /action="\/logout"/, 'the sidebar has no sign-out');
+  assert.match(aside, /class="dwho"/, 'the sidebar does not say whose it is');
+});
+
 /* ===================================================================== */
 /* Signing out                                                           */
 /* ===================================================================== */

@@ -1169,3 +1169,20 @@ Every message in «رسايلي» rendered «شوف الإيصال», which was 
 decisions. The moment the demo had announcements and due reminders in it, two thirds of the buttons
 promised a receipt and went somewhere else. The label now comes from the row's `kind`. **A string
 that is correct because of what the table happens to contain is not correct.**
+
+**[2026-08-08] [ux] A responsive breakpoint is a second product, and it collects its own bugs.**
+At ≥900px this shell swaps its entire navigation: the bottom tab bar becomes a rail and the ☰ drawer
+is redundant. What it actually did was reuse the FIVE resident tabs as that rail, leaving the other
+twenty-four destinations behind a hamburger nobody looks for beside a visible sidebar — and it reset
+`header`'s z-index to 20, which put the bar back under the drawer panel and un-fixed the
+uncloseable-drawer bug in that branch alone. Neither is visible in any phone screenshot, and the
+owner found both by opening the site on a tablet-width browser. **Both shells are now generated from
+one `menuBody`, with a test comparing their hrefs — a second copy that merely exists is how they
+drifted the first time. The axe scan runs at 360px AND 1100px for the same reason.**
+
+**[2026-08-08] [rtl] Check which physical side a logical property lands on; do not reason it out.**
+The help bubble's comment asserted "inline-start in RTL is the LEFT". It is the RIGHT. The placement
+happened to be correct and the stated reason was backwards, which is worse than no comment — the next
+person moves it based on the explanation. It also meant nobody noticed the bubble was sitting on the
+inline-start EDGE where the wide layout's navigation rail lives, covering the last items of the menu.
+`getBoundingClientRect` on both elements answers this in one line.

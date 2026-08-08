@@ -382,10 +382,13 @@ nav.bottom .ico{font-size:1.2rem}
   display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;
   color:var(--brand);font-weight:700;text-decoration:none;font-size:.85rem;
   box-shadow:0 2px 10px rgba(0,0,0,.12);opacity:.96}
-/* The help button floats at the inline-START. In RTL that is the LEFT — the end
-   of every line, where whitespace usually is. At inset-inline-end it sat exactly
-   where Arabic text begins and covered the first words of whatever card was
-   under it. An LTR habit that reads as a layout bug in Arabic. */
+/* The help button floats at the inline-START. In an RTL document that is the
+   RIGHT edge, and it is deliberate: at inset-inline-end it sat on the LEFT,
+   where an Arabic line ENDS, covering the tail of whatever card was under it.
+   (The earlier note here described the same rule with start and end swapped —
+   the placement was right, the explanation of which physical side that is was
+   not.) On the wide layout the same edge is where the navigation rail lives,
+   so the bubble moves across rather than sitting on top of the menu. */
 .steps{display:flex;gap:6px;margin-block-end:16px}
 .steps i{flex:1;block-size:5px;border-radius:3px;background:var(--surface-2)}
 .steps i.on{background:var(--brand)}
@@ -519,20 +522,30 @@ header .htext{flex:1;min-inline-size:0}
    content gets a second column — the board reviews receipts on a laptop, and a
    760px ribbon down the middle of a 27" screen wastes the space where the
    receipt image and its details want to sit next to each other. */
+/* The wide layout swaps the phone's two navigations for one permanent rail.
+   It used to REUSE the bottom tab bar as that rail, which meant a board member
+   on a tablet got five links — الرئيسية, إيصالاتي, فلوس القرية, أخبار, رسايلي —
+   and no visible route to the other twenty-four, because the ☰ that held them
+   is a phone affordance nobody looks for beside a sidebar. The rail now carries
+   the whole menu, and the tab bar and the drawer both stand down. */
+.side{display:none}
 @media (min-width:900px){
   body{padding-block-end:0}
-  header{position:sticky;inset-block-start:0;z-index:20}
-  nav.bottom{position:sticky;inset-block-start:0;inset-block-end:auto;flex-direction:column;
-    align-items:stretch;border-block-start:0;border-inline-end:1px solid var(--border);
-    inline-size:210px;block-size:100vh;padding:12px 8px;gap:4px}
-  nav.bottom a{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;
-    font-size:1rem;border-radius:12px;padding:10px 14px}
-  nav.bottom a[aria-current="page"]{background:var(--brand-soft)}
+  /* Stays at 70. It dropped to 20 here, which put the app bar UNDER the drawer
+     panel (60) — so at this width the drawer became uncloseable again, in the
+     one branch a phone screenshot never shows. */
+  header{position:sticky;inset-block-start:0;z-index:70}
+  nav.bottom{display:none}
+  .drawer{display:none}
+  .side{display:block;position:sticky;inset-block-start:0;inline-size:260px;flex:none;
+    block-size:100dvh;overflow-y:auto;padding:12px 8px;
+    border-inline-end:1px solid var(--border);background:var(--surface)}
+  .side .dwho{margin-block-end:10px}
   .shell{display:flex;align-items:flex-start}
   /* No tab bar at this width, but the help bubble is still fixed 20px up —
      so the reserve shrinks to clear that alone rather than to zero. */
   main{flex:1;max-width:900px;padding-block-end:90px}
-  .fab{inset-block-end:20px}
+  .fab{inset-block-end:20px;inset-inline-start:auto;inset-inline-end:20px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 }
 @media (min-width:1280px){ main{max-width:1080px} }
@@ -719,6 +732,40 @@ export function applyPrefs(html: string, theme: string, fs: string, path: string
  * name in the subtitle and no drawer, which is exactly what the login screen
  * wants anyway.
  */
+/**
+ * The menu itself — identity, groups, sign-out — used by BOTH shells.
+ *
+ * There are two, because a phone and a laptop want different things: the phone
+ * gets a `<details>` drawer over the page, the wide layout gets a rail that is
+ * always there. What they must never be is two different MENUS. Before this
+ * they were: the wide layout reused the five-item bottom tab bar as its
+ * sidebar, so a board member on a tablet saw «الرئيسية · إيصالاتي · فلوس القرية
+ * · أخبار · رسايلي» and nothing else — the other twenty-four destinations were
+ * behind a ☰ they had no reason to think was there. That is what "the sidebar
+ * is not complete with all tabs" was describing.
+ */
+function menuBody(
+  name: string, roleAr: string, initials: string,
+  menu: Array<{ group: string; items: Array<{ href: string; icon: string; label: string; badge?: number }> }>,
+  path: string,
+): string {
+  return `
+    <a class="dwho" href="/me"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
+      <span><b>${esc(name)}</b><span>${esc(roleAr)}</span></span></a>
+    ${menu.map(g => `<div class="dgroup"><h2>${esc(g.group)}</h2>${
+      g.items.map(i => `<a href="${esc(i.href)}" ${i.href === path ? 'aria-current="page"' : ''}>`
+        + `<span class="ico" aria-hidden="true">${esc(i.icon)}</span><span>${esc(i.label)}</span>`
+        + (i.badge ? `<span class="chip warn badge">${num(i.badge)}</span>` : '')
+        + `</a>`).join('')
+    }</div>`).join('')}
+    <div class="dout">
+      <form method="post" action="/logout">
+        <button type="submit"><span class="ico" aria-hidden="true">↪</span>${
+          esc(t.shell.signOut)}</button>
+      </form>
+    </div>`;
+}
+
 export function applyShell(
   html: string,
   shell: { name: string; roleAr: string; unread?: number;
@@ -737,21 +784,14 @@ export function applyShell(
     ><span class="d-menu" aria-hidden="true">☰</span
     ><span class="d-x" aria-hidden="true">✕</span></summary>
   <div class="drawer-scrim" aria-hidden="true"></div>
-  <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">
-    <a class="dwho" href="/me"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
-      <span><b>${esc(shell.name)}</b><span>${esc(shell.roleAr)}</span></span></a>
-    ${shell.menu.map(g => `<div class="dgroup"><h2>${esc(g.group)}</h2>${
-      g.items.map(i => `<a href="${esc(i.href)}" ${i.href === path ? 'aria-current="page"' : ''}>`
-        + `<span class="ico" aria-hidden="true">${esc(i.icon)}</span><span>${esc(i.label)}</span></a>`).join('')
-    }</div>`).join('')}
-    <div class="dout">
-      <form method="post" action="/logout">
-        <button type="submit"><span class="ico" aria-hidden="true">↪</span>${
-          esc(t.shell.signOut)}</button>
-      </form>
-    </div>
-  </nav>
+  <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">${
+    menuBody(shell.name, shell.roleAr, initials, shell.menu, path)}</nav>
 </details>`;
+
+  const side = `<aside class="side">
+  <nav aria-label="${esc(t.shell.menu)}">${
+    menuBody(shell.name, shell.roleAr, initials, shell.menu, path)}</nav>
+</aside>`;
 
   const ctl = `<a class="hbtn" href="/search" aria-label="${esc(t.search.title)}"`
     + ` title="${esc(t.search.title)}"><span aria-hidden="true">🔎</span></a>`
@@ -761,6 +801,7 @@ export function applyShell(
 
   return html
     .replace('<!--SHELL_DRAWER-->', drawer)
+    .replace('<!--SHELL_SIDE-->', side)
     .replace(`<p><!--SHELL_WHO-->${esc(t.app.place)}</p>`,
              `<p class="who"><b>${esc(shell.name)}</b><span>${esc(shell.roleAr)}</span></p>`)
     .replace('<!--SHELL_CTL-->', ctl)
@@ -779,33 +820,21 @@ export function page(opts: PageOpts, body: string): string {
   // same sign-out. Two copies of this markup exist because most pages are
   // personalised after rendering and a few (the ones that pass `me` directly)
   // are not; if you change one, change both.
+  // Same `menuBody` as `applyShell`, so the two shells cannot drift apart.
   const drawer = opts.me?.menu?.length ? `
 <details class="drawer" id="drawer">
   <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}"
     ><span class="d-menu" aria-hidden="true">☰</span
     ><span class="d-x" aria-hidden="true">✕</span></summary>
   <div class="drawer-scrim" aria-hidden="true"></div>
-  <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">
-    <a class="dwho" href="/me"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
-      <span><b>${esc(opts.me.name)}</b><span>${esc(opts.me.roleAr)}</span></span></a>
-    ${opts.me.menu.map(g => `
-    <div class="dgroup">
-      <h2>${esc(g.group)}</h2>
-      ${g.items.map(i => `
-      <a href="${esc(i.href)}" ${i.href === opts.path ? 'aria-current="page"' : ''}>
-        <span class="ico" aria-hidden="true">${esc(i.icon)}</span>
-        <span>${esc(i.label)}</span>
-        ${i.badge ? `<span class="chip warn badge">${num(i.badge)}</span>` : ''}
-      </a>`).join('')}
-    </div>`).join('')}
-    <div class="dout">
-      <form method="post" action="/logout">
-        <button type="submit"><span class="ico" aria-hidden="true">↪</span>${
-          esc(t.shell.signOut)}</button>
-      </form>
-    </div>
-  </nav>
+  <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">${
+    menuBody(opts.me.name, opts.me.roleAr, initials, opts.me.menu, opts.path ?? '')}</nav>
 </details>` : '';
+
+  const side = opts.me?.menu?.length ? `<aside class="side">
+  <nav aria-label="${esc(t.shell.menu)}">${
+    menuBody(opts.me.name, opts.me.roleAr, initials, opts.me.menu, opts.path ?? '')}</nav>
+</aside>` : '';
 
   const nav = opts.showNav === false ? '' : `
 <nav class="bottom" aria-label="${esc(t.a11y.menu)}">
@@ -864,6 +893,7 @@ ${opts.jsMessages ? `<script>const MSG=${JSON.stringify(opts.jsMessages)};</scri
   </div>
 </header>
 <div class="shell">
+${side}<!--SHELL_SIDE-->
 ${nav}
 <main id="main">
 ${opts.offline ? `<div class="banner warn">${esc(t.states.offlineBanner)}</div>` : ''}

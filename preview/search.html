@@ -306,10 +306,13 @@ nav.bottom .ico{font-size:1.2rem}
   display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;
   color:var(--brand);font-weight:700;text-decoration:none;font-size:.85rem;
   box-shadow:0 2px 10px rgba(0,0,0,.12);opacity:.96}
-/* The help button floats at the inline-START. In RTL that is the LEFT — the end
-   of every line, where whitespace usually is. At inset-inline-end it sat exactly
-   where Arabic text begins and covered the first words of whatever card was
-   under it. An LTR habit that reads as a layout bug in Arabic. */
+/* The help button floats at the inline-START. In an RTL document that is the
+   RIGHT edge, and it is deliberate: at inset-inline-end it sat on the LEFT,
+   where an Arabic line ENDS, covering the tail of whatever card was under it.
+   (The earlier note here described the same rule with start and end swapped —
+   the placement was right, the explanation of which physical side that is was
+   not.) On the wide layout the same edge is where the navigation rail lives,
+   so the bubble moves across rather than sitting on top of the menu. */
 .steps{display:flex;gap:6px;margin-block-end:16px}
 .steps i{flex:1;block-size:5px;border-radius:3px;background:var(--surface-2)}
 .steps i.on{background:var(--brand)}
@@ -443,20 +446,30 @@ header .htext{flex:1;min-inline-size:0}
    content gets a second column — the board reviews receipts on a laptop, and a
    760px ribbon down the middle of a 27" screen wastes the space where the
    receipt image and its details want to sit next to each other. */
+/* The wide layout swaps the phone's two navigations for one permanent rail.
+   It used to REUSE the bottom tab bar as that rail, which meant a board member
+   on a tablet got five links — الرئيسية, إيصالاتي, فلوس القرية, أخبار, رسايلي —
+   and no visible route to the other twenty-four, because the ☰ that held them
+   is a phone affordance nobody looks for beside a sidebar. The rail now carries
+   the whole menu, and the tab bar and the drawer both stand down. */
+.side{display:none}
 @media (min-width:900px){
   body{padding-block-end:0}
-  header{position:sticky;inset-block-start:0;z-index:20}
-  nav.bottom{position:sticky;inset-block-start:0;inset-block-end:auto;flex-direction:column;
-    align-items:stretch;border-block-start:0;border-inline-end:1px solid var(--border);
-    inline-size:210px;block-size:100vh;padding:12px 8px;gap:4px}
-  nav.bottom a{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;
-    font-size:1rem;border-radius:12px;padding:10px 14px}
-  nav.bottom a[aria-current="page"]{background:var(--brand-soft)}
+  /* Stays at 70. It dropped to 20 here, which put the app bar UNDER the drawer
+     panel (60) — so at this width the drawer became uncloseable again, in the
+     one branch a phone screenshot never shows. */
+  header{position:sticky;inset-block-start:0;z-index:70}
+  nav.bottom{display:none}
+  .drawer{display:none}
+  .side{display:block;position:sticky;inset-block-start:0;inline-size:260px;flex:none;
+    block-size:100dvh;overflow-y:auto;padding:12px 8px;
+    border-inline-end:1px solid var(--border);background:var(--surface)}
+  .side .dwho{margin-block-end:10px}
   .shell{display:flex;align-items:flex-start}
   /* No tab bar at this width, but the help bubble is still fixed 20px up —
      so the reserve shrinks to clear that alone rather than to zero. */
   main{flex:1;max-width:900px;padding-block-end:90px}
-  .fab{inset-block-end:20px}
+  .fab{inset-block-end:20px;inset-inline-start:auto;inset-inline-end:20px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 }
 @media (min-width:1280px){ main{max-width:1080px} }
@@ -484,8 +497,7 @@ header .htext{flex:1;min-inline-size:0}
       <form method="post" action="/logout">
         <button type="submit"><span class="ico" aria-hidden="true">↪</span>تسجيل الخروج</button>
       </form>
-    </div>
-  </nav>
+    </div></nav>
 </details>
   <div class="htext">
     <h1>بوابة قرية الأطباء</h1>
@@ -509,6 +521,17 @@ header .htext{flex:1;min-inline-size:0}
   </div>
 </header>
 <div class="shell">
+<aside class="side">
+  <nav aria-label="القائمة">
+    <a class="dwho" href="/me"><span class="avatar" aria-hidden="true">عش</span>
+      <span><b>د. عمرو شاهين</b><span>ساكن</span></span></a>
+    <div class="dgroup"><h2>حسابي وفلوسي</h2><a href="/" ><span class="ico" aria-hidden="true">🏠</span><span>الرئيسية</span></a><a href="/me" ><span class="ico" aria-hidden="true">👤</span><span>حسابي</span></a><a href="/pay" ><span class="ico" aria-hidden="true">💳</span><span>دفع جديد</span></a><a href="/payments" ><span class="ico" aria-hidden="true">🧾</span><span>إيصالاتي</span></a><a href="/notifications" ><span class="ico" aria-hidden="true">🔔</span><span>رسايلي</span></a></div><div class="dgroup"><h2>القرية</h2><a href="/finance" ><span class="ico" aria-hidden="true">💰</span><span>فلوس القرية</span></a><a href="/finance/units" ><span class="ico" aria-hidden="true">🏢</span><span>حالة السداد لكل عمارة</span></a><a href="/map" ><span class="ico" aria-hidden="true">🗺️</span><span>خريطة القرية</span></a><a href="/news" ><span class="ico" aria-hidden="true">📣</span><span>أخبار القرية</span></a><a href="/albums" ><span class="ico" aria-hidden="true">📸</span><span>ألبومات الأعمال</span></a><a href="/maintenance" ><span class="ico" aria-hidden="true">🛠️</span><span>بلاغات الصيانة</span></a><a href="/search" aria-current="page"><span class="ico" aria-hidden="true">🔎</span><span>دوّر في كل حاجة</span></a></div>
+    <div class="dout">
+      <form method="post" action="/logout">
+        <button type="submit"><span class="ico" aria-hidden="true">↪</span>تسجيل الخروج</button>
+      </form>
+    </div></nav>
+</aside>
 
 <nav class="bottom" aria-label="القائمة">
   <a href="/" ><span class="ico" aria-hidden="true">🏠</span>الرئيسية</a>

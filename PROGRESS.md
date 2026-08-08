@@ -10,10 +10,32 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~670 checks green** (107 unit · 417 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 42 pages**). Live on Cloudflare with all 24 migrations applied to real D1. |
+| **Status** | 🟢 **~670 checks green** (107 unit · 418 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ⚠️ **The DEPLOYED Worker is several sessions behind this branch** (R-098) — judge the product from `preview/demo.html` or `npm run dev`, not from the live URL, until it is redeployed. |
 | **Last updated** | 2026-08-08 (session 29) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 29c — the layout nobody had opened
+
+The owner sent a screenshot of the LIVE site, and it carried two separate facts.
+
+**One:** the deployment is several sessions behind the repository. No drawer, no avatar, no bell, the
+old «أدوات المجلس» card, «عمارة — شقة —» in the greeting. Everything reported missing is fixed on the
+branch and invisible in production until somebody deploys. **Do not judge this product from the live
+URL right now** — use `preview/demo.html` or `npm run dev`.
+
+**Two,** and this was new: the screenshot is the **≥900px layout**, and that branch is a second
+product. It swapped the whole navigation — and what it swapped in was the FIVE resident tabs reused
+as a sidebar, leaving the other twenty-four destinations behind a ☰ nobody looks for next to a
+visible rail. The same media query also reset `header` to `z-index:20`, putting the bar back under
+the drawer panel and re-breaking the uncloseable drawer **in that branch alone**. Neither is visible
+in a phone screenshot; both were sitting in front of the owner on a tablet-width browser.
+
+Both shells now render from one `menuBody`, the wide layout gets the full grouped rail with identity
+and sign-out, and `tests/access/shell.test.ts` compares the two menus' hrefs so they cannot drift
+again. `npm run a11y` now scans at 360px **and** 1100px — 84 page-scans, 0 violations.
+
+---
 
 ### What changed in session 29b — the shell, walked instead of screenshotted
 
