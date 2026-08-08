@@ -13,12 +13,13 @@
     "verify:demo": "python3 tests/fixtures/verify_demo.py",
     "seed:demo": "python3 seed/demo/generate.py",
     "preview": "python3 tests/fixtures/render_preview.py",
-    "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run test:access && npm run verify:ledger && npm run verify:demo && npm run drill:restore && npm run screens",
+    "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run test:access && npm run verify:ledger && npm run verify:demo && npm run drill:restore && npm run screens && npm run a11y",
     "screens": "npm run build && node .build/tests/fixtures/render_screens.js",
     "verify:d1": "bash tools/verify-d1.sh",
     "gen:vapid": "node tools/gen-vapid.mjs",
     "drill:restore": "node tools/restore-drill.mjs",
-    "backup": "node tools/backup.mjs"
+    "backup": "node tools/backup.mjs",
+    "a11y": "node tools/a11y-scan.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

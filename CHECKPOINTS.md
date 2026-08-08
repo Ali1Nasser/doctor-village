@@ -340,8 +340,13 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]`
 **Gates**
 - [ ] **One real elderly resident completes a payment unassisted**, observed
 - [ ] Lighthouse: performance ≥ 90 on mobile, accessibility = 100
-- [ ] **WCAG 2.2 AA** review with no unresolved blocker — including *Target Size* and *Accessible
-      Authentication*, tested across the **whole** login and payment journeys, not components
+- [~] **WCAG 2.2 AA** — axe-core over all 33 rendered screens at 360px: **0 violations**
+      (`npm run a11y`, wired into `verify`, watched failing against a deliberate contrast/alt
+      probe before being trusted). It found and fixed a real one: `--warn` on `--warn-soft` at
+      3.89:1 across nine screens, on the "these figures are invented" banner among others.
+      Still `[~]` and not `[x]`: axe covers roughly a third of AA and cannot judge *Accessible
+      Authentication* or whether a journey makes sense — the gate says the whole login and
+      payment journeys, reviewed by a person, and that has not happened.
 - [ ] Keyboard-only completion of the full payment flow; screen-reader semantics in Arabic
 - [~] EXIF/geolocation stripped **on the server**, from bytes it actually parses —
       `lib/storage/image.ts`, WebP/JPEG/PNG, refusing anything else. It was previously stripped

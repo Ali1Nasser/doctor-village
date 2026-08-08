@@ -9,7 +9,7 @@
 :root{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
   --brand:#0E5C63; --brand-ink:#fff; --brand-soft:#E3F0F1; --accent:#C1873B;
-  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#A96A00; --warn-soft:#FBEFD9;
+  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#8F5A00; --warn-soft:#FBEFD9;
   --danger:#B3261E; --danger-soft:#FBE9E7; --info:#1F5FA8; --info-soft:#E5EFFA;
   --border:#DFDCD5; --radius:14px; --tap:48px; --fs-body:17px;
 }
@@ -37,7 +37,7 @@ html[data-theme="dark"]{
 html[data-theme="light"]{
   --bg:#F7F6F3; --surface:#fff; --surface-2:#F0EEE9; --ink:#1F2421; --ink-muted:#5B615C;
   --brand:#0E5C63; --brand-ink:#fff; --brand-soft:#E3F0F1;
-  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#A96A00; --warn-soft:#FBEFD9;
+  --ok:#1D7A4C; --ok-soft:#E4F3EA; --warn:#8F5A00; --warn-soft:#FBEFD9;
   --danger:#B3261E; --danger-soft:#FBE9E7; --info:#1F5FA8; --info-soft:#E5EFFA;
   --border:#DFDCD5;
 }
@@ -137,8 +137,14 @@ th{color:var(--ink-muted);font-weight:600;font-size:.85rem}
 td.n{direction:ltr;text-align:start;font-variant-numeric:tabular-nums}
 details summary{cursor:pointer;min-block-size:var(--tap);display:flex;align-items:center;
   color:var(--brand);font-weight:600}
-.banner{border-radius:var(--radius);padding:12px 14px;margin-block:14px;font-size:.9rem;
-  border:1px solid currentColor}
+/* A banner is where the app explains a warning, a refusal or "these figures
+   are invented" — the last text on the page that should be small. It was .9rem
+   (15.3px) against a 17px body floor set for a 71-year-old on a five-year-old
+   Android. Measured, not guessed: axe-core flagged --warn on --warn-soft at
+   3.89:1 across nine screens, below the 4.5:1 AA threshold for normal text.
+   Both were fixed at the token, so every warn surface improved at once. */
+.banner{border-radius:var(--radius);padding:12px 14px;margin-block:14px;font-size:1rem;
+  line-height:1.7;border:1px solid currentColor}
 .banner.warn{background:var(--warn-soft);color:var(--warn)}
 .banner.info{background:var(--info-soft);color:var(--info)}
 .banner.ok{background:var(--ok-soft);color:var(--ok)}
