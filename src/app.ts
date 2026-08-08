@@ -396,7 +396,8 @@ export function createApp(deps: AppDeps) {
     return out;
   };
 
-  app.get('/login', () => html(v.loginPage()));
+  app.get('/login', c => html(v.loginPage(undefined,
+    c.req.query('bye') ? _t.login.signedOut : undefined)));
 
   /* ---- passkey ceremonies -------------------------------------------- */
 
@@ -2189,6 +2190,8 @@ export function createApp(deps: AppDeps) {
     return html(mv.buildingPage({
       b: await vmap.buildingSummary(ctx, deps.db, id as never),
       work: await vmap.buildingWork(ctx, deps.db, id as never),
+      units: await vmap.buildingUnits(ctx, deps.db, id as never),
+      tickets: await vmap.buildingTickets(ctx, deps.db, id as never),
     }));
   });
 
@@ -2382,6 +2385,27 @@ export function createApp(deps: AppDeps) {
    * would make this an open redirect, and "change your text size" is a
    * plausible enough link to click that it is worth closing properly.
    */
+  /**
+   * «تسجيل الخروج» — sign out of this device.
+   *
+   * It did not exist. `messages/ar.json` has carried the string since CP-4,
+   * nothing rendered it, and there was no route: the only way out of the portal
+   * was «اقفل كل الجلسات» on `/me`, which ends every session the person has on
+   * every device. That is the right control for "somebody has my phone" and
+   * exactly the wrong one for "I showed my neighbour the announcement on his
+   * iPad" — and it was the only one.
+   *
+   * POST, not GET: a link would be followed by a prefetcher and by the browser's
+   * own history restoration, logging people out at random.
+   */
+  app.post('/logout', async c => {
+    const cookie = c.req.header('cookie') ?? '';
+    const token = /(?:^|;\s*)qa_session=([^;]+)/.exec(cookie)?.[1] ?? null;
+    if (token) await data.closeThisSession(deps.db, token, deps.now);
+    c.header('set-cookie', 'qa_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure');
+    return c.redirect('/login?bye=1', 303);
+  });
+
   app.post('/prefs', async c => {
     const f = await c.req.parseBody();
     const which = String(f['cycle'] ?? '');

@@ -172,6 +172,78 @@ export async function buildingWork(ctx: AuthContext, db: Db, buildingId: Id) {
   return r.results ?? [];
 }
 
+/**
+ * The flats themselves.
+ *
+ * A building page that says «6 وحدة» and stops is a dead end: the map's whole
+ * job is to get somebody from "which building is that" to something useful, and
+ * a count is not something useful. The flats are what the register is made of.
+ *
+ * Payment status rides the SAME `unit_status_public` gate as the aggregate
+ * above (Q11) — per-flat is strictly more revealing than per-building, so it
+ * cannot be less protected. Owner NAMES are never selected here at any setting:
+ * this page is reachable by every resident, and who lives in flat 4 is not a
+ * fact the map is entitled to publish.
+ */
+export async function buildingUnits(ctx: AuthContext, db: Db, buildingId: Id): Promise<Array<{
+  id: string; unit_number: string;
+  paid_piastres: number | null; outstanding_piastres: number | null;
+}>> {
+  require_(ctx.role, 'profile.edit_own');
+  const pub = await db.prepare(`SELECT unit_status_public AS p FROM settings WHERE id = 1`)
+    .first<{ p: number }>();
+
+  if (!pub?.p) {
+    const r = await db.prepare(
+      `SELECT u.id, u.unit_number FROM units u
+        WHERE u.building_id = ? AND u.is_active = 1
+        ORDER BY CAST(u.unit_number AS INTEGER), u.unit_number`
+    ).bind(buildingId).all<{ id: string; unit_number: string }>();
+    return (r.results ?? []).map(u => ({
+      ...u, paid_piastres: null, outstanding_piastres: null,
+    }));
+  }
+
+  const r = await db.prepare(
+    `SELECT u.id, u.unit_number, ub.paid_piastres, ub.outstanding_piastres
+       FROM units u
+       LEFT JOIN v_unit_balance ub ON ub.unit_id = u.id
+      WHERE u.building_id = ? AND u.is_active = 1
+      ORDER BY CAST(u.unit_number AS INTEGER), u.unit_number`
+  ).bind(buildingId).all<{
+    id: string; unit_number: string;
+    paid_piastres: number | null; outstanding_piastres: number | null;
+  }>();
+  return r.results ?? [];
+}
+
+/**
+ * Open maintenance on this building.
+ *
+ * Already public at `/maintenance` for the whole village, so nothing new is
+ * disclosed by grouping it — and "is anyone dealing with the lift" is one of
+ * the two questions somebody opens a building page to ask. Resolved tickets are
+ * included when recent, because "it was fixed last week" is the answer as often
+ * as "it is open".
+ */
+export async function buildingTickets(ctx: AuthContext, db: Db, buildingId: Id): Promise<Array<{
+  id: string; ticket_no: string; title_ar: string; status: string; created_at: string;
+}>> {
+  require_(ctx.role, 'profile.edit_own');
+  const r = await db.prepare(
+    `SELECT t.id, t.ticket_no, t.title_ar, t.status, t.created_at
+       FROM maintenance_tickets t
+       JOIN units u ON u.id = t.unit_id
+      WHERE u.building_id = ?
+      ORDER BY CASE t.status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+               t.created_at DESC
+      LIMIT 8`
+  ).bind(buildingId).all<{
+    id: string; ticket_no: string; title_ar: string; status: string; created_at: string;
+  }>();
+  return r.results ?? [];
+}
+
 /* ===================================================================== */
 /* Admin: drafting, verifying, publishing                                */
 /* ===================================================================== */

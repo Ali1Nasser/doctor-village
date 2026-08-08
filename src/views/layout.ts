@@ -137,8 +137,12 @@ body{margin:0;background:var(--bg);color:var(--ink);line-height:1.75;font-size:1
 /* ---- the app bar ---------------------------------------------------------
    Sticky, because it carries the drawer and on a long finance table the way
    back to everything else should not be a scroll to the top. */
+/* z-index 70 puts the bar ABOVE the open drawer panel (60) and its scrim (55).
+   It has to: the ☰ that opens the drawer is the only thing that closes it, and
+   at z-index 40 the panel covered it — elementFromPoint over the button
+   returned a group heading, so the drawer opened and could not be shut. */
 header{background:var(--brand);color:var(--brand-ink);padding:10px 12px;
-  display:flex;align-items:center;gap:10px;position:sticky;inset-block-start:0;z-index:40;
+  display:flex;align-items:center;gap:10px;position:sticky;inset-block-start:0;z-index:70;
   box-shadow:0 1px 0 rgba(0,0,0,.12)}
 header .htext{flex:1;min-inline-size:0}
 header h1{margin:0;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -157,17 +161,62 @@ header p{margin:0;opacity:.85;font-size:.8rem;white-space:nowrap;overflow:hidden
   color:var(--brand);display:grid;place-items:center;font-weight:800;font-size:.85rem;
   text-decoration:none;flex:none}
 
-/* ---- the drawer: <details>, so it works with no JavaScript at all -------- */
+/* ---- the drawer: <details>, so it works with no JavaScript at all --------
+   Three things here are load-bearing and were each wrong once:
+
+   1. The panel starts BELOW the app bar (inset-block-start is var(--bar)), and
+      the bar outranks it. Otherwise the ☰ that toggles the drawer is underneath
+      the drawer, and there is no way back out — with no JavaScript the summary
+      is the only control there is.
+   2. The dim behind the panel is a real ELEMENT, not the box-shadow spread it
+      used to be. A shadow is painted, not hit-tested: every tap on the dark area
+      went straight through to whatever link was under it, so "tap outside to
+      dismiss" silently navigated somewhere random instead.
+   3. The glyph flips ☰ → ✕ when open, because a button whose icon does not
+      change does not read as the way to close what it opened. */
 .drawer{flex:none}
+/* position+z-index so the summary paints above the scrim. Both live inside the
+   header's stacking context, so the header's own z-index does not separate
+   them: without this, the scrim (55) covers the toggle and the drawer still
+   cannot be closed — the second version of the same bug. */
 .drawer > summary{list-style:none;min-inline-size:40px;min-block-size:40px;display:grid;
   place-items:center;border-radius:10px;background:rgba(255,255,255,.14);cursor:pointer;
-  font-size:1.15rem}
+  font-size:1.15rem;position:relative;z-index:80}
 .drawer > summary::-webkit-details-marker{display:none}
 .drawer > summary:hover{background:rgba(255,255,255,.26)}
 .drawer[open] > summary{background:rgba(255,255,255,.3)}
-.drawer-panel{position:fixed;inset-block:0;inset-inline-start:0;inline-size:min(86vw,320px);
-  background:var(--surface);color:var(--ink);z-index:60;overflow-y:auto;padding:14px 12px 90px;
-  box-shadow:0 0 0 100vmax rgba(0,0,0,.45);border-inline-end:1px solid var(--border)}
+.drawer > summary .d-x{display:none}
+.drawer[open] > summary .d-menu{display:none}
+.drawer[open] > summary .d-x{display:inline}
+.drawer-scrim{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.45)}
+/* Positioned against the HEADER, not the viewport: inset-block-start:100% is
+   exactly the bottom of the bar and block-size:calc(100dvh - 100%) is exactly
+   what is left, at any font size. The first attempt used a --bar token holding
+   a hand-counted 58px; the bar actually measures 68px, so the top ten pixels of
+   the menu slid underneath it — and the number would have needed re-deriving
+   for each of the three text sizes. A number you have to keep in step with a
+   layout is a number that will fall out of step with it. */
+.drawer-panel{position:absolute;inset-block-start:100%;inset-inline-start:0;
+  block-size:calc(100dvh - 100%);inline-size:min(86vw,320px);
+  background:var(--surface);color:var(--ink);z-index:60;overflow-y:auto;
+  padding:12px 12px calc(24px + env(safe-area-inset-bottom));
+  border-inline-end:1px solid var(--border);overscroll-behavior:contain}
+/* Who this menu belongs to. The app bar carries the same two lines, and the
+   open panel hides the app bar — so without this you cannot see whose menu you
+   are looking at while you are looking at it. */
+.dwho{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;
+  background:var(--surface-2);margin-block-end:6px;text-decoration:none;color:var(--ink)}
+.dwho .avatar{background:var(--brand);color:var(--brand-ink)}
+.dwho b{display:block;font-size:.95rem}
+.dwho span{display:block;font-size:.78rem;color:var(--ink-muted)}
+/* Sign-out closes the group, visually and literally: separated by a rule,
+   tinted like the destructive thing it is, and last. */
+.dout{margin-block-start:10px;padding-block-start:10px;border-block-start:1px solid var(--border)}
+.dout button{display:flex;align-items:center;gap:10px;inline-size:100%;min-block-size:var(--tap);
+  padding:6px 10px;border-radius:10px;border:0;background:none;cursor:pointer;
+  color:var(--danger);font-family:inherit;font-weight:700;font-size:.95rem;text-align:start}
+.dout button:hover{background:var(--danger-soft,var(--surface-2))}
+.dout .ico{inline-size:26px;text-align:center;flex:none}
 .dgroup{margin-block-end:14px}
 .dgroup h2{font-size:.78rem;margin:12px 6px 6px;color:var(--ink-muted);font-weight:700;
   letter-spacing:.02em}
@@ -684,12 +733,23 @@ export function applyShell(
     .map(w => [...w][0] ?? '').join('');
 
   const drawer = `<details class="drawer">
-  <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}"><span aria-hidden="true">☰</span></summary>
+  <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}"
+    ><span class="d-menu" aria-hidden="true">☰</span
+    ><span class="d-x" aria-hidden="true">✕</span></summary>
+  <div class="drawer-scrim" aria-hidden="true"></div>
   <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">
+    <a class="dwho" href="/me"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
+      <span><b>${esc(shell.name)}</b><span>${esc(shell.roleAr)}</span></span></a>
     ${shell.menu.map(g => `<div class="dgroup"><h2>${esc(g.group)}</h2>${
       g.items.map(i => `<a href="${esc(i.href)}" ${i.href === path ? 'aria-current="page"' : ''}>`
         + `<span class="ico" aria-hidden="true">${esc(i.icon)}</span><span>${esc(i.label)}</span></a>`).join('')
     }</div>`).join('')}
+    <div class="dout">
+      <form method="post" action="/logout">
+        <button type="submit"><span class="ico" aria-hidden="true">↪</span>${
+          esc(t.shell.signOut)}</button>
+      </form>
+    </div>
   </nav>
 </details>`;
 
@@ -715,12 +775,19 @@ export function page(opts: PageOpts, body: string): string {
     .split(/\s+/).filter(Boolean).slice(0, 2)
     .map(w => [...w][0] ?? '').join('');
 
+  // Kept in step with `applyShell` above — same scrim, same identity block,
+  // same sign-out. Two copies of this markup exist because most pages are
+  // personalised after rendering and a few (the ones that pass `me` directly)
+  // are not; if you change one, change both.
   const drawer = opts.me?.menu?.length ? `
 <details class="drawer" id="drawer">
-  <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}">
-    <span aria-hidden="true">☰</span>
-  </summary>
+  <summary aria-label="${esc(t.shell.menuOpen)}" title="${esc(t.shell.menu)}"
+    ><span class="d-menu" aria-hidden="true">☰</span
+    ><span class="d-x" aria-hidden="true">✕</span></summary>
+  <div class="drawer-scrim" aria-hidden="true"></div>
   <nav class="drawer-panel" aria-label="${esc(t.shell.menu)}">
+    <a class="dwho" href="/me"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
+      <span><b>${esc(opts.me.name)}</b><span>${esc(opts.me.roleAr)}</span></span></a>
     ${opts.me.menu.map(g => `
     <div class="dgroup">
       <h2>${esc(g.group)}</h2>
@@ -731,6 +798,12 @@ export function page(opts: PageOpts, body: string): string {
         ${i.badge ? `<span class="chip warn badge">${num(i.badge)}</span>` : ''}
       </a>`).join('')}
     </div>`).join('')}
+    <div class="dout">
+      <form method="post" action="/logout">
+        <button type="submit"><span class="ico" aria-hidden="true">↪</span>${
+          esc(t.shell.signOut)}</button>
+      </form>
+    </div>
   </nav>
 </details>` : '';
 

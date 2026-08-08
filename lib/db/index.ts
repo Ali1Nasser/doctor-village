@@ -125,6 +125,37 @@ let _hash: (t: string) => string | Promise<string> = (t: string) => t;
 export function setTokenHasher(fn: (t: string) => string | Promise<string>) { _hash = fn; }
 function hashToken(t: string): string | Promise<string> { return _hash(t); }
 
+/**
+ * Sign out of THIS device, and only this one.
+ *
+ * Distinct from `revokeAllSessions`, which is the "somebody has my phone"
+ * button on `/me` and ends every session the person has. This is the ordinary
+ * one — the family iPad, the phone handed to a neighbour to show them the
+ * announcement — and it existed nowhere: `messages/ar.json` has carried
+ * «تسجيل الخروج» since CP-4 with nothing rendering it and no route behind it.
+ *
+ * The token is hashed here rather than taken as a hash, so a caller cannot pass
+ * one for a session that is not theirs. Revoking is conditional on the row
+ * still being live, so a double submit is a no-op rather than an error.
+ */
+export async function closeThisSession(
+  db: Db, sessionToken: string, now: Clock,
+): Promise<void> {
+  const hash = await hashToken(sessionToken);
+  const s = await db.prepare(
+    `SELECT id, profile_id FROM sessions WHERE token_hash = ? AND revoked_at IS NULL`
+  ).bind(hash).first<{ id: string; profile_id: string }>();
+  if (!s) return;                        // already gone: signing out twice is fine
+  await db.batch([
+    db.prepare(`UPDATE sessions SET revoked_at = ?, revoked_by = ?
+                 WHERE id = ? AND revoked_at IS NULL`).bind(now(), s.profile_id, s.id),
+    db.prepare(
+      `INSERT INTO audit_log (id, actor_id, action, entity_table, entity_id)
+       VALUES (?,?, 'session.close', 'sessions', ?)`
+    ).bind(newId('AUD'), s.profile_id, s.id),
+  ]);
+}
+
 export interface AuditFacts {
   action: string;
   table: string;

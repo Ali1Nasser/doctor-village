@@ -94,9 +94,20 @@ ${d.map
 </div>`);
 }
 
+/** The same labels `/maintenance` uses. Two vocabularies for one status is how
+ *  a resident ends up thinking «اتصلّح» and «مقفول» are different outcomes. */
+const TICKET_AR: Record<string, string> = t.maintenance.statusLabels;
+
 export function buildingPage(d: {
   b: BuildingSummary;
   work: { id: string; title_ar: string; happened_on: string }[];
+  /** The flats. A building page that gives a COUNT and stops is a dead end —
+   *  the map exists to get somebody from "which building is that" to something
+   *  they can act on. Balances are null when Q11's setting is off. */
+  units: Array<{ id: string; unit_number: string;
+                 paid_piastres: number | null; outstanding_piastres: number | null }>;
+  tickets: Array<{ id: string; ticket_no: string; title_ar: string;
+                   status: string; created_at: string }>;
 }): string {
   return page({ title: msg(t.map.buildingTitle, { code: d.b.code }), active: 'home' }, `
 <a class="backlink" href="/map">← ${esc(t.map.back)}</a>
@@ -121,6 +132,50 @@ export function buildingPage(d: {
     // "this building owes nothing", which is a false statement rather than an
     // absent one.
     : `<p class="hint">${esc(t.map.statusHidden)}</p>`}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🏠 ${esc(t.map.unitsTitle)}</h3>
+  <p class="hint">${esc(d.units.some(u => u.outstanding_piastres !== null)
+    ? t.map.unitsHint : t.map.unitsHidden)}</p>
+  ${d.units.map(u => {
+    // `outstanding` null means the general assembly has not published per-unit
+    // status. Printing 0.00 instead would be a claim, not a blank.
+    const known = u.outstanding_piastres !== null;
+    const settled = known && (u.outstanding_piastres ?? 0) <= 0;
+    return `
+  <a class="row row-link" href="/units/${esc(u.id)}/statement">
+    <span class="ico" aria-hidden="true">🚪</span>
+    <span class="row-body">
+      <b>${esc(msg(t.map.unitNo, { n: '' }))}${num(u.unit_number)}</b>
+      ${known ? `<span class="muted">${esc(t.map.unitPaid)} ${money(u.paid_piastres ?? 0)}</span>` : ''}
+    </span>
+    <span class="row-end">${known
+      ? settled
+        ? `<span class="chip ok">✔ ${esc(t.map.unitSettled)}</span>`
+        : `<span class="chip warn">${esc(t.map.unitDue)} ${money(u.outstanding_piastres ?? 0)}</span>`
+      : '<span aria-hidden="true">←</span>'}</span>
+  </a>`;
+  }).join('')}
+</div>
+
+<div class="card">
+  <h3 style="margin-block-start:0">🛠️ ${esc(t.map.ticketsTitle)}</h3>
+  ${d.tickets.length === 0
+    ? empty('🧰', t.map.noTickets, t.map.noTicketsHint)
+    : d.tickets.map(k => `
+    <div class="row">
+      <span class="ico" aria-hidden="true">${
+        k.status === 'open' ? '🔴' : k.status === 'in_progress' ? '🟡' : '✅'}</span>
+      <span class="row-body">
+        <b>${esc(k.title_ar)}</b>
+        <span class="muted">${num(k.ticket_no)} · ${arDate(k.created_at)}</span>
+      </span>
+      <span class="row-end"><span class="chip ${
+        k.status === 'open' ? 'warn' : k.status === 'in_progress' ? 'info' : 'ok'}">${
+        esc(TICKET_AR[k.status] ?? k.status)}</span></span>
+    </div>`).join('')}
+  <a class="btn btn-2" href="/maintenance">${esc(t.map.allTickets)}</a>
 </div>
 
 <div class="card">

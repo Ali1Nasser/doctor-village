@@ -10,10 +10,41 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~660 checks green** (107 unit · 407 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 42 pages**). Live on Cloudflare with all 24 migrations applied to real D1. |
+| **Status** | 🟢 **~670 checks green** (107 unit · 417 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 42 pages**). Live on Cloudflare with all 24 migrations applied to real D1. |
 | **Last updated** | 2026-08-08 (session 29) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 29b — the shell, walked instead of screenshotted
+
+The owner reported the sidebar as incomplete: missing tabs, no logout, a dead bell, thin map detail.
+Every one of those was real, and the first was the symptom of something worse.
+
+- **The drawer could not be closed.** The open panel covered the `<summary>` that toggles it —
+  `elementFromPoint` over the ☰ returned a group heading — and the dim behind it was a
+  `box-shadow`, which is painted but never hit-tested, so taps on the "backdrop" fell through and
+  navigated to whatever link was underneath. With no JavaScript the summary is the only control
+  there is. Opening the menu was a one-way trip.
+- **Nothing was missing from the menu; the fold was invisible.** 29 links, 1681px of content in an
+  844px panel, no cue that it scrolled. Reported, reasonably, as "tabs missing".
+- **There was no way to sign out.** «تسجيل الخروج» has sat in `messages/ar.json` since CP-4 with
+  nothing rendering it and no route behind it. The only exit was «اقفل كل الجلسات», which ends every
+  session on every device.
+- **The bell was dead** because the demo had zero notifications, and **every building page was a
+  dead end** because `albums.building_id` (added by migration 0023) was never populated and
+  `maintenance_tickets.unit_id` was always NULL — so all 34 buildings showed a count, a total and
+  «مفيش شغل منشور». One demo ticket named «عمارة 5», which does not exist in a village numbered
+  14–47.
+
+Fixed, and now tested rather than looked at: `tests/access/shell.test.ts` asserts the markup that
+makes closing possible, that the menu is built from `can()` (an admin sees seventeen board
+destinations, a resident none of them), and that signing out revokes the session ROW — a cookie an
+attacker already copied is not a sign-out — while leaving the person's other device alone. The
+building page's new per-flat list rides the same Q11 assembly gate as the aggregate beside it,
+because per-flat is strictly more revealing and a second screen quietly publishing what the first
+withholds is how a privacy setting stops meaning anything.
+
+---
 
 ### What changed in session 29 — the four screens that had no door
 
@@ -123,6 +154,38 @@ backup, all of which had been writing a state the application can never reach.
 
 ## Work log
 *Newest first. One entry per work block.*
+
+### [2026-08-08] — session 29b · the shell nobody had walked
+**Owner:** *"why the side bar not complete with all tabs, not logout tab, not bell icon and the map
+details, many things missing, re check correctly and do not miss anything."*
+
+Every item was real. The report of "missing tabs" turned out to be the mildest of them: the menu was
+complete and simply scrolled without saying so, while the drawer it lived in **could not be closed**
+— the panel covered its own toggle, and the dim behind it was a `box-shadow`, which paints a
+backdrop and hit-tests as nothing, so tapping "outside" navigated to whatever link was underneath.
+
+Built: a scrim that is an element, a panel positioned against the header so the bar stays above it at
+every text size, a ☰→✕ glyph, an identity block inside the panel (the open panel covers the app bar,
+so the name and role have to be repeated where you can see them), `POST /logout`, notifications in
+the demo seed, and a building page with the flats, the tickets and the album on it.
+
+**Four things worth carrying forward:**
+
+1. **When a component's only control is one element, assert that element is topmost at its own
+   coordinates.** One line of `elementFromPoint` found both halves of the drawer bug. Neither is
+   visible in a screenshot — the menu looks perfect open.
+2. **A layout constant that tracks something the browser already knows will fall out of step.** The
+   first fix used `--bar:58px`, counted by hand. Measured: 68px, across three text sizes that each
+   would have needed their own number. `inset-block-start:100%` against the header is exact and has
+   nothing to maintain.
+3. **A single CTA string across differently-shaped rows is a lie waiting for data.** Every inbox
+   message said «شوف الإيصال»; correct while the only messages were payment decisions, wrong on two
+   thirds of them the moment the demo had announcements in it.
+4. **A privacy gate has to cover every screen that reveals the fact, not the screen it was written
+   for.** The building page's new per-flat list is strictly more revealing than the per-building
+   aggregate beside it, so it rides the same `unit_status_public` setting — with a test that fails if
+   it ever stops doing so, and a second one asserting no owner NAME reaches the page body at any
+   setting.
 
 ### [2026-08-08] — session 29 · the sandbox interface, and the four screens behind it
 **Owner:** *"get all the features, GUI, UIUX from the HTML pages zip and integrated in the app, and

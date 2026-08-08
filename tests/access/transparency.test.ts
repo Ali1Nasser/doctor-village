@@ -539,6 +539,53 @@ describe('the units page respects the assembly gate — Q11 / R-002', () => {
       'the board cannot see collection status even for themselves');
     raw.prepare(`UPDATE settings SET unit_status_public = 1 WHERE id = 1`).run();
   });
+
+  /**
+   * The building page grew a per-flat list, and per-flat is strictly MORE
+   * revealing than the per-building aggregate beside it — so it cannot be less
+   * protected. A second screen quietly publishing what the first one withholds
+   * is exactly how a privacy setting stops meaning anything.
+   */
+  it('...and the same gate covers the per-flat list on a building page', async () => {
+    const bid = (raw.prepare(`SELECT id FROM buildings LIMIT 1`).get() as { id: string }).id;
+
+    const on = await app.request(`/buildings/${bid}`,
+      { headers: { authorization: 'Bearer tok-res' } });
+    assert.match(await on.text(), /وحدة/, 'the flats are not listed at all');
+
+    raw.prepare(`UPDATE settings SET unit_status_public = 0 WHERE id = 1`).run();
+    const off = await app.request(`/buildings/${bid}`,
+      { headers: { authorization: 'Bearer tok-res' } });
+    const body = await off.text();
+    assert.equal(off.status, 200);
+    assert.match(body, /وحدة/, 'the flats themselves are register facts and stay visible');
+    assert.ok(!/متبقّي|خالص/.test(body),
+      'per-flat payment status shipped while the assembly gate was closed');
+    assert.match(body, /الجمعية العمومية/, 'the lock is not explained');
+    raw.prepare(`UPDATE settings SET unit_status_public = 1 WHERE id = 1`).run();
+  });
+
+  /** Who lives in flat 4 is not a fact the map is entitled to publish, at any
+   *  setting. The aggregate is a general-assembly decision; a name is not. */
+  it('a building page never carries owner names', async () => {
+    const bid = (raw.prepare(`SELECT id FROM buildings LIMIT 1`).get() as { id: string }).id;
+    const owner = raw.prepare(
+      `SELECT p.full_name AS n FROM unit_owners uo
+         JOIN units u ON u.id = uo.unit_id
+         JOIN profiles p ON p.id = uo.profile_id
+        WHERE u.building_id = ? AND uo.valid_to IS NULL LIMIT 1`
+    ).get(bid) as { n: string } | undefined;
+    if (!owner) return;
+    const html = await (await app.request(`/buildings/${bid}`,
+      { headers: { authorization: 'Bearer tok-res' } })).text();
+    // The app bar and drawer name the CALLER, legitimately and on every screen,
+    // so the assertion is about the page's own content. Checking the whole
+    // document fails the moment the caller happens to own a flat in the
+    // building being viewed — which is the common case, not an edge one.
+    const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+    assert.ok(!main.includes(owner.n),
+      `the building page published «${owner.n}» — the map is a navigation layer, not a directory`);
+  });
 });
 
 /* ================================================================== */

@@ -957,9 +957,22 @@ export function mePage(d: {
 <div class="card">
   <h3 style="margin-block-start:0">🎛️ ${esc(t.me.prefs)}</h3>
   <p class="hint">${esc(t.me.prefsHint)}</p>
-  <form method="post" action="/me/sessions/revoke">
+</div>
+
+<!-- Two different sign-outs, and the difference is the whole point of showing
+     both. The ordinary one ends THIS device; the second ends every device the
+     person has, which is what you want when the phone is in somebody else's
+     hand. Until now only the second existed, so "log out of my son's tablet"
+     meant logging out of your own phone too. -->
+<div class="card">
+  <h3 style="margin-block-start:0">↪ ${esc(t.shell.signOut)}</h3>
+  <form method="post" action="/logout">
+    <p class="hint">${esc(t.me.signOutHint)}</p>
+    <button class="btn btn-2" type="submit">${esc(t.shell.signOut)}</button>
+  </form>
+  <form method="post" action="/me/sessions/revoke" style="margin-block-start:14px">
     <p class="hint">${esc(t.me.signOutAllHint)}</p>
-    <button class="btn btn-2" type="submit">${esc(t.me.signOutAll)}</button>
+    <button class="btn btn-danger" type="submit">${esc(t.me.signOutAll)}</button>
   </form>
 </div>`);
 }

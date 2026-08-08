@@ -1138,3 +1138,34 @@ and used `abs(hash(pid))` for the receipt digests — so every regeneration rewr
 the diff was 486 lines of noise. Nobody reads a diff like that, which means nobody would have seen a
 real change hiding in it. Any generator that claims determinism must use `hashlib`, never `hash()`,
 and the claim is worth testing: generate twice, `diff -q`.
+
+**[2026-08-08] [ux] A `box-shadow` scrim is painted, never hit-tested.** The drawer dimmed the page
+with `box-shadow:0 0 0 100vmax rgba(0,0,0,.45)` — which looks exactly like a modal backdrop and
+behaves nothing like one. `document.elementFromPoint` in the dark area returned the card underneath,
+so every "tap outside to dismiss" navigated somewhere at random instead of closing the menu. A
+backdrop has to be an element. Related and worse: the panel covered the `<summary>` that toggles it,
+so with no JavaScript there was **no way to close the drawer at all** — and `elementFromPoint` over
+the ☰ returning an `<h2>` is how you find that out in one line. **When a component's only control is
+one element, assert that element is the topmost thing at its own coordinates.**
+
+**[2026-08-08] [ux] A menu that scrolls without saying so reads as a menu that is missing items.**
+The drawer held 29 links, 1681px of content in an 844px panel, and the owner's report was "the
+sidebar is not complete with all tabs". Nothing was missing; the fold was invisible. Two things fix
+it and both are worth having anyway: the panel now starts below the app bar rather than under it (so
+the bar's presence tells you the panel is a scrolling region, not the whole screen), and the last
+item is a visually distinct sign-out that ends the list — a menu with a recognisable BOTTOM is a
+menu you know you have seen all of.
+
+**[2026-08-08] [agent] Positioning against a magic number means keeping the number in step.**
+First attempt put the drawer at `inset-block-start:var(--bar)` with `--bar:58px` counted by hand from
+the padding and control heights. Measured: 68px, so the top ten pixels of the menu slid under the
+bar — and the token would have needed re-deriving for each of the three text sizes the product
+offers. `position:absolute; inset-block-start:100%; block-size:calc(100dvh - 100%)` against the
+header is exact at every size and has nothing to maintain. **If a layout constant has to track
+something the browser already knows, let the browser tell you.**
+
+**[2026-08-08] [ux] One CTA string across differently-shaped records is a lie waiting for data.**
+Every message in «رسايلي» rendered «شوف الإيصال», which was fine while the only messages were payment
+decisions. The moment the demo had announcements and due reminders in it, two thirds of the buttons
+promised a receipt and went somewhere else. The label now comes from the row's `kind`. **A string
+that is correct because of what the table happens to contain is not correct.**

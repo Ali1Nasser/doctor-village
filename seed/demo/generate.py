@@ -12,7 +12,7 @@ Deterministic: fixed seed, no wall-clock. Re-running produces byte-identical
 SQL, so a diff is meaningful.
 
 Run:  python3 seed/demo/generate.py
-Out:  seed/demo/001_village.sql … 005_audit.sql
+Out:  seed/demo/001_village.sql … 006_notifications.sql
 """
 
 import random, pathlib, hashlib
@@ -103,6 +103,21 @@ L = lines_village.append
 # and emitted last, in chronological order, into `005_audit.sql`.
 audit_rows = []          # (when, actor, action, table, entity_id, role)
 ROLE_OF = {}             # profile id -> role, filled as people are created
+
+# ------------------------------------------------------- notifications ----
+# `notifications` was the second table the demo left empty, and the effect was
+# the same shape as the empty audit log: the bell in the app bar draws its badge
+# only when there is something unread, «رسايلي» rendered its empty state, and a
+# board looking at the demo concluded the notification feature did not work.
+#
+# Every row below is one the PRODUCT would have written — `approveAndPost` and
+# `reviewPayment` insert a decision message in the same batch as the decision
+# (R-065), and a published announcement notifies the village. Nothing here is a
+# message the app could not have sent.
+notif_rows = []          # (when, profile, kind, title, body, link, payment_id, read)
+
+def notify(when, profile, kind, title, body, link='/payments', payment=None, read=True):
+    notif_rows.append((when, profile, kind, title, body, link, payment, read))
 
 def audit(when, actor, action, table, entity_id=None):
     """One row in the trail. `when` is a full ISO instant, not a date: the
@@ -347,6 +362,12 @@ def emit_payment(i, amount, status, category, ledger_account, date,
         P(f"UPDATE payments SET status={q(status)}, review_reason_ar={q(reason)}, "
           f"reviewed_by={q(CHAIR)}, reviewed_at={q(date + 'T19:00:00Z')} WHERE id={q(pid)};")
         audit(date + 'T19:00:00Z', CHAIR, 'payment.review', 'payments', pid)
+        kinds = {'rejected': 'payment_rejected', 'duplicate': 'payment_rejected',
+                 'needs_info': 'payment_needs_info'}
+        titles = {'rejected': 'إيصالك محتاج مراجعة', 'duplicate': 'إيصالك محتاج مراجعة',
+                  'needs_info': 'محتاجين منك توضيح'}
+        notify(date + 'T19:00:00Z', submitter, kinds[status], titles[status],
+               f"إيصال {rno}: {reason}", payment=pid)
         return
 
     # approved -> post the ledger entry first, then attach it
@@ -371,6 +392,8 @@ def emit_payment(i, amount, status, category, ledger_account, date,
       f"fund_id={q(F_DEP if deposit else F_OP)} WHERE id={q(pid)};")
     P(post_sql)
     audit(date + 'T19:00:00Z', CHAIR, 'payment.review', 'payments', pid)
+    notify(date + 'T19:00:00Z', submitter, 'payment_approved', 'إيصالك اتقبل ✅',
+           f"إيصال {rno} اتعتمد بمبلغ {amount / 100:.2f} ج.م", payment=pid)
     if over_split:
         P(f"INSERT INTO resident_credits (id, unit_id, profile_id, amount_piastres, "
           f"source_payment_id, journal_entry_id) VALUES ({q(did('RCR', pay_n))},{q(uid)},"
@@ -617,6 +640,15 @@ for n, (when, typ, slug, title, body) in enumerate(POSTS, start=1):
       f"VALUES ({q(did('PST', n))},{q(fold(title))},{q(fold(title + ' ' + body))},'');")
     audit(when + 'T12:00:00Z', CHAIR, 'post.publish', 'posts', did('PST', n))
 
+# Only the two most recent announcements notify the village, and only they are
+# left UNREAD. The product notifies on every publication, but a demo whose bell
+# reads «9» after nobody has done anything says the portal nags — and the number
+# the board should see is the one a resident would actually be carrying.
+for n, (when, typ, slug, title, body) in list(enumerate(POSTS, start=1))[-2:]:
+    for r in residents:
+        notify(when + 'T12:05:00Z', r, 'new_announcement', title,
+               body[:120], link=f"/news/{slug}", read=False)
+
 # An attached PDF whose TEXT is indexed but whose words appear nowhere in the
 # post itself. This is the CP-6 gate made concrete: searching «الميزانيه
 # التقديريه» must return the minutes post, and it can only do so through
@@ -629,11 +661,16 @@ K(f"UPDATE posts_fts SET attachment_text = "
   f"{q(fold('محضر الجمعيه العموميه اغسطس 2024.pdf الميزانية التقديرية لسنة 2025 بند صيانة مواتير المياه اعتماد المصروفات الرأسمالية نصاب الحضور'))} "
   f"WHERE post_id = {q(did('PST', 2))};")
 
-K(f"\nINSERT INTO albums (id, title_ar, description_ar, happened_on, linked_expense_id, created_by, "
-  f"safety_checked_by, safety_checked_at, published_at) VALUES "
+# `building_id` is what makes «شغل منشور على العمارة دي» work on /buildings/:id.
+# Migration 0023 added the column for exactly that and nothing ever set it, so
+# every building page in the demo showed «مفيش شغل منشور» — the map led to a
+# dead end thirty-four times.
+ALBUM_BUILDING = did('BLD', 9)             # عمارة 22
+K(f"\nINSERT INTO albums (id, title_ar, description_ar, happened_on, linked_expense_id, "
+  f"building_id, created_by, safety_checked_by, safety_checked_at, published_at) VALUES "
   f"({q(did('ALB', 1))},'ترميم سور القرية — المرحلة الأولى','صور قبل وبعد أعمال الدهانات',"
-  f"'2026-06-15',{q(did('EXP', 21))},{q(OPERATOR)},{q(CHAIR)},'2026-06-20T10:00:00Z',"
-  f"'2026-06-20T10:00:00Z');")
+  f"'2026-06-15',{q(did('EXP', 21))},{q(ALBUM_BUILDING)},{q(OPERATOR)},{q(CHAIR)},"
+  f"'2026-06-20T10:00:00Z','2026-06-20T10:00:00Z');")
 for n in range(1, 5):
     K(f"INSERT INTO album_photos (id, album_id, storage_key, caption_ar, sort_order, exif_stripped) "
       f"VALUES ({q(did('APH', n))},{q(did('ALB', 1))},{q(f'albums/wall/{n}.webp')},"
@@ -646,12 +683,17 @@ K(f"INSERT INTO albums_fts (album_id, title_ar, search_body) VALUES "
 K("\n-- ------------------------------------------------ maintenance ---")
 # One ticket in each interesting state, including a resolved one linked to the
 # expense that paid for the fix — the shape the board will actually look at.
+# `unit_id` was NULL on all three, so no ticket ever appeared on a building
+# page — and the first one named «عمارة 5», which does not exist: this village
+# is numbered 14 to 47. Invented data still has to be internally consistent, or
+# a board member checks one detail and stops trusting the rest.
+UNIT_OF = {code: uid for uid, code, u_no, _ in units if u_no == 1}
 TICKETS = [
-    (1, residents[0], None, "نور السلم في عمارة 5 مش شغال",
+    (1, residents[0], UNIT_OF[22], "نور السلم في عمارة 22 مش شغال",
      "الطابق التالت والرابع ضلمة من يومين.", "open", "", "2026-08-02T18:20:00Z"),
-    (2, residents[1], None, "حنفية الحديقة الجنوبية بتنقّط",
+    (2, residents[1], UNIT_OF[31], "حنفية الحديقة الجنوبية بتنقّط",
      "المياه بتتهدر طول اليوم.", "in_progress", "", "2026-07-28T09:10:00Z"),
-    (3, residents[0], None, "باب البوابة الرئيسية بيصدر صوت عالي",
+    (3, residents[0], UNIT_OF[22], "باب البوابة الرئيسية بيصدر صوت عالي",
      "محتاج تزييت.", "resolved", "تم تزييت المفصلات وتغيير الماسورة السفلية.", "2026-07-05T11:00:00Z"),
 ]
 for n, who, unit, title, body, status, resolution, when in TICKETS:
@@ -673,6 +715,29 @@ K("\n-- settings the board would fill in — bank details deliberately left NULL
 K(f"UPDATE settings SET countersign_threshold_piastres=500000, updated_by={q(CHAIR)}, "
   f"updated_at='2026-01-05T09:00:00Z' WHERE id=1;")
 audit('2026-01-05T09:00:00Z', CHAIR, 'settings.update', 'settings', '1')
+
+# ==================================================== notifications =======
+# One reminder per unpaid flat, a fortnight before the due date — the shape of
+# the `due_reminder` the board would send, and the reason a resident who owes
+# money has something in «رسايلي» besides receipt decisions.
+for i in idx[188:]:
+    notify('2026-03-17T09:00:00Z', owner_of(i), 'due_reminder',
+           'فاضل أسبوعين على آخر ميعاد للاشتراك',
+           'اشتراك الصيانة السنوي 2026 آخر ميعاد له 31 مارس. تقدر تدفع من «دفع جديد».',
+           link='/pay', read=False)
+
+lines_notif = []
+N = lines_notif.append
+N(HEADER)
+N("-- ---------------------------------------------------- notifications ---")
+N("-- Each row is one the product itself would have written: a decision message")
+N("-- in the same batch as the decision (R-065), an announcement, or a reminder.")
+notif_rows.sort(key=lambda r: r[0])
+for n, (when, profile, kind, title, body, link, payment, read) in enumerate(notif_rows, start=1):
+    N(f"INSERT INTO notifications (id, profile_id, kind, title_ar, body_ar, link_path, "
+      f"payment_id, read_at, created_at) VALUES ({q(did('NTF', n))},{q(profile)},{q(kind)},"
+      f"{q(title)},{q(body)},{q(link)},{q(payment)},"
+      f"{q(when) if read else 'NULL'},{q(when)});")
 
 # ==================================================== the audit trail =====
 # Emitted last, sorted, so the file reads as the history it is. It is written
@@ -696,7 +761,7 @@ for n, (when, actor, action, table, entity, role) in enumerate(audit_rows, start
 # ---------------------------------------------------------------- write ----
 for name, buf in [("001_village.sql", lines_village), ("002_opening.sql", lines_ledger),
                   ("003_money.sql", lines_money), ("004_content.sql", lines_content),
-                  ("005_audit.sql", lines_audit)]:
+                  ("005_audit.sql", lines_audit), ("006_notifications.sql", lines_notif)]:
     (OUT / name).write_text("\n".join(buf) + "\n", encoding="utf-8")
     print(f"  {name:22s} {len(buf):5d} statements")
 

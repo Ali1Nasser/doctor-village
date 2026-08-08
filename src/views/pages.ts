@@ -31,12 +31,19 @@ const UPLOAD_MSGS = {
 /* Login & activation — 04_UX_SPEC §3                                    */
 /* ===================================================================== */
 
-export function loginPage(error?: string): string {
+/**
+ * `notice` is the calm counterpart to `error`: it says something expected just
+ * happened. Signing out lands here, and without it the portal answers "log me
+ * out" by showing the login form — indistinguishable from being thrown out by
+ * an expired session, which is the reading that makes people distrust it.
+ */
+export function loginPage(error?: string, notice?: string): string {
   return page({ title: t.login.title, showNav: false,
                scripts: [PASSKEY_LOGIN_JS], jsMessages: LOGIN_MSGS }, `
 <div class="card">
   <h2 style="margin-block-start:0">${esc(t.login.title)}</h2>
   <p class="muted">${esc(t.login.subtitle)}</p>
+  ${notice ? `<div class="banner ok">${esc(notice)}</div>` : ''}
   ${error ? `<div class="banner warn">${esc(error)}</div>` : ''}
   <form id="login-form" method="post" action="/login">
     <div class="field">
@@ -1134,6 +1141,21 @@ export function inboxPage(d: {
   pushOn?: boolean;
   demo?: boolean;
 }): string {
+  /**
+   * The button's words come from the KIND, not from a single string.
+   *
+   * Every message shipped «شوف الإيصال» — including announcements about the
+   * general assembly and reminders that the subscription is due, where there is
+   * no receipt to see and the button lied about where it went. Once the demo
+   * had messages in it that were not payment decisions, the label was wrong on
+   * two thirds of them.
+   */
+  const cta = (n: InboxItem): string =>
+    n.kind === 'new_announcement' ? t.inbox.viewPost
+    : n.kind === 'due_reminder' ? t.inbox.viewPay
+    : n.kind.startsWith('payment_') ? t.inbox.viewReceipt
+    : t.inbox.viewGeneric;
+
   const rows = d.items.length === 0
     ? emptyState('📬', t.inbox.empty)
     : d.items.map(n => `
@@ -1144,7 +1166,7 @@ export function inboxPage(d: {
   </div>
   <div class="muted" style="white-space:pre-line">${esc(n.bodyAr)}</div>
   <div class="muted">${arDate(n.createdAt)}</div>
-  ${n.linkPath ? `<a class="btn btn-2" href="${esc(n.linkPath)}">${esc(t.inbox.viewLink)}</a>` : ''}
+  ${n.linkPath ? `<a class="btn btn-2" href="${esc(n.linkPath)}">${esc(cta(n))}</a>` : ''}
 </div>`).join('');
 
   /* The push card. Rendered only when the deployment actually has a VAPID key —
