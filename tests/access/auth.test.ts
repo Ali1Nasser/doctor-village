@@ -215,6 +215,30 @@ describe('challenges and activation links are single-use', () => {
       'a spent link still renders the button');
   });
 
+  /**
+   * Every activation screen must offer a way OUT.
+   *
+   * The board asked the obvious question of the page in the screenshot they
+   * sent — «يسجل دخول فين؟» — and it had no answer on it. Worse, when passkey
+   * enrolment fails the banner reads «لازم تسجّل دخول الأول» and there was
+   * nothing to press: a phone, an instruction to log in, and no route to the
+   * login screen.
+   */
+  it('an activation screen always offers a route to the login page', async () => {
+    const token = passkey.randomToken();
+    await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(token),
+      'first_activation', NOW);
+
+    const landing = await (await app.request(`/login/activate?t=${token}`)).text();
+    assert.match(landing, /href="\/login"/, 'the landing page strands anyone whose link failed');
+
+    const enrolled = await (await activate(token)).text();
+    assert.match(enrolled, /href="\/login"/, 'the activation page has no way out');
+    // …and it says how they will get back IN next time, which is the question
+    // the page provokes and never answered.
+    assert.match(enrolled, /المرة الجاية/);
+  });
+
   it('issuing a new link invalidates the previous one', async () => {
     const a = passkey.randomToken(), b = passkey.randomToken();
     await adb.createActivationChallenge(adminCtx, db, P_NEW, await passkey.sha256(a), 'recovery', NOW);

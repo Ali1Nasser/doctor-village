@@ -85,6 +85,8 @@ export function activateConfirmPage(token: string): string {
     <button class="btn" type="submit">${esc(t.activate.confirmCta)}</button>
   </form>
   <p class="hint">${esc(t.activate.confirmHint)}</p>
+  <p class="hint">${esc(t.activate.stuck)}</p>
+  <a class="btn btn-2" href="/login">${esc(t.activate.toLogin)}</a>
 </div>`);
 }
 
@@ -106,6 +108,18 @@ export function activatePage(name: string, recoveryCodes: string[]): string {
 </div>
 <div class="card">
   <p class="muted" style="margin-block-start:0">${esc(t.activate.secondDevice)}</p>
+</div>
+
+<!-- Answers the question this page provokes and never used to answer: "fine,
+     and where do I log in NEXT time?" There was also no route OUT of here — if
+     enrolment failed, the banner said «لازم تسجّل دخول الأول» and offered
+     nothing to press, which leaves somebody holding a phone and a dead end. -->
+<div class="card">
+  <h3 style="margin-block-start:0">🔓 ${esc(t.activate.nextTimeTitle)}</h3>
+  <p class="muted">${esc(t.activate.nextTimeBody)}</p>
+  <p class="hint">${esc(t.activate.saveLink)}</p>
+  <a class="btn btn-2" href="/login">${esc(t.activate.toLogin)}</a>
+  <p class="hint">${esc(t.activate.stuck)}</p>
 </div>`);
 }
 
