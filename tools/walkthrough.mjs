@@ -416,7 +416,156 @@ const ACTIONS = [
     } },
 ];
 
-for (const a of ACTIONS) {
+/**
+ * The set that runs against PRODUCTION.
+ *
+ * Same idea, different arithmetic on risk. Every write here lands on the real
+ * database the board is about to be shown, so each journey is either performed
+ * on data created for the test and destroyed after it, or it reads the current
+ * value, changes it, and puts it back.
+ *
+ * Two journeys are deliberately NOT run live, and saying which matters more
+ * than the coverage number:
+ *
+ *   · **recording an expense** — it lands in the countersign queue and the
+ *     product has no screen that removes it. A «مصروف تجربة» sitting in the
+ *     board's queue is worse than an untested path, and the path is covered
+ *     locally and by `tests/access/expenses.test.ts`.
+ *   · **publishing an announcement** — same shape: it would appear at the top
+ *     of the village's news feed with no way to take it down from the product.
+ *
+ * Approving a receipt is also not run against a REAL demo receipt: an approval
+ * posts a journal entry and moves the village's headline figures. The walk
+ * creates its own receipt and closes that one instead.
+ */
+const LIVE_ACTIONS = [
+  { role: 'resident', id: 'act-pay', title: 'يقدّم إيصال دفع (الرحلة كاملة)', expect: 'works',
+    run: ACTIONS.find(a => a.id === 'act-pay').run },
+
+  { role: 'resident', id: 'act-profile', title: 'يعدّل بيانات التواصل — والقيمة بترجع زي ما كانت',
+    expect: 'works',
+    async run(page) {
+      await page.goto(`${BASE}/me`, { waitUntil: 'networkidle' });
+      const before = {
+        phone: await page.inputValue('#me-phone').catch(() => ''),
+        note: await page.inputValue('#me-note').catch(() => ''),
+      };
+      await page.fill('#me-phone', '01099887766');
+      await page.fill('#me-note', 'تجربة فحص — هترجع زي ما كانت');
+      await page.click('form[action="/me"] button[type=submit]');
+      await page.waitForLoadState('networkidle');
+      const said = await banner(page);
+
+      await page.fill('#me-phone', before.phone);
+      await page.fill('#me-note', before.note);
+      await page.click('form[action="/me"] button[type=submit]');
+      await page.waitForLoadState('networkidle');
+      const restored = await page.inputValue('#me-note').catch(() => '');
+      return { at: page.url(), said, ok: restored === before.note };
+    } },
+
+  { role: 'resident', id: 'act-no-review', title: 'مش المفروض يقدر يراجع إيصالات', expect: 'refused',
+    run: ACTIONS.find(a => a.id === 'act-no-review').run },
+  { role: 'operator', id: 'act-no-approve', title: 'مش المفروض يعتمد فلوس', expect: 'refused',
+    run: ACTIONS.find(a => a.id === 'act-no-approve').run },
+  { role: 'finance_reviewer', id: 'act-audit-read', title: 'يقرا دفتر القيود وسجل التغييرات',
+    expect: 'works', run: ACTIONS.find(a => a.id === 'act-audit-read').run },
+  { role: 'finance_reviewer', id: 'act-review-readonly',
+    title: 'يشوف طابور الإيصالات للمراجعة — من غير أزرار اعتماد', expect: 'works',
+    run: ACTIONS.find(a => a.id === 'act-review-readonly').run },
+
+  { role: 'admin', id: 'act-create-account', title: 'ينشئ حساب جديد (حساب تجربة بيتقفل بعدين)',
+    expect: 'works',
+    async run(page) {
+      await page.goto(`${BASE}/admin/users`, { waitUntil: 'networkidle' });
+      await page.fill('#np-name', 'حساب فحص — يتقفل بعد التجربة');
+      await page.fill('#np-phone', meta.throwawayPhone);
+      await page.click('form[method="post"][action="/admin/users"] button[type=submit]');
+      await page.waitForLoadState('networkidle');
+      const said = await banner(page);
+      return { at: page.url(), said, ok: /اتعمل/.test(said) };
+    } },
+
+  { role: 'admin', id: 'act-temp-password', title: 'يبعت كلمة سر مؤقتة للحساب الجديد',
+    expect: 'works',
+    async run(page) {
+      // Search for the account this walk just created, rather than pressing the
+      // first button on a page of 205 real members.
+      await page.goto(`${BASE}/admin/members?q=${encodeURIComponent('حساب فحص')}`,
+        { waitUntil: 'networkidle' });
+      const btn = page.locator('form[action$="/password"] button[type=submit]').first();
+      if (!await btn.count()) return { at: page.url(), said: 'الحساب مش ظاهر في البحث', ok: false };
+      await btn.click();
+      await page.waitForLoadState('networkidle');
+      const shown = (await page.textContent('body'))
+        .match(/\b[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/);
+      return { at: page.url(), said: shown ? 'اتعرضت مرة واحدة' : 'مظهرتش', ok: !!shown };
+    } },
+
+  { role: 'admin', id: 'act-reject', title: 'يرفض الإيصال اللي الفحص بعته، بسبب مكتوب',
+    expect: 'works',
+    async run(page) {
+      await page.goto(`${BASE}/admin/review`, { waitUntil: 'networkidle' });
+      // The walk's own receipt carries a note nothing else has. Rejecting
+      // touches no ledger; approving would move the village's figures.
+      const form = page.locator('.card', { hasText: 'تحويل إنستا باي — تجربة' })
+        .locator('form[action^="/admin/review/"]').first();
+      if (!await form.count()) {
+        return { at: page.url(), said: 'إيصال الفحص مش في الطابور', ok: false };
+      }
+      await form.locator('textarea[name="reason"]')
+        .fill('إيصال تجربة أثناء فحص الموقع — مش دفعة حقيقية.');
+      await form.locator('button[value="reject"]').click();
+      await page.waitForLoadState('networkidle');
+      return { at: page.url(), said: await banner(page) };
+    } },
+
+  { role: 'admin', id: 'act-settings', title: 'يغيّر إعداد — والقيمة بترجع زي ما كانت',
+    expect: 'works',
+    async run(page) {
+      await page.goto(`${BASE}/admin/settings`, { waitUntil: 'networkidle' });
+      const F = 'form[action="/admin/settings"]';
+      const field = `${F} input[name="community_name_ar"]`;
+      const before = await page.inputValue(field).catch(() => null);
+      if (before === null) return { at: page.url(), said: 'الحقل مش موجود', ok: false };
+
+      await page.fill(field, before + ' ');
+      await page.locator(`${F} button[type=submit]`).first().click();
+      await page.waitForLoadState('networkidle');
+      const said = await banner(page);
+
+      await page.goto(`${BASE}/admin/settings`, { waitUntil: 'networkidle' });
+      await page.fill(field, before);
+      await page.locator(`${F} button[type=submit]`).first().click();
+      await page.waitForLoadState('networkidle');
+      await page.goto(`${BASE}/admin/settings`, { waitUntil: 'networkidle' });
+      const after = await page.inputValue(field);
+      return { at: page.url(), said, ok: after === before,
+               problem: after === before ? null : 'الإعداد مرجعش لقيمته الأصلية' };
+    } },
+
+  { role: 'developer', id: 'act-role', title: 'يغيّر دور حساب الفحص — ويرجّعه', expect: 'works',
+    async run(page) {
+      await page.goto(`${BASE}/admin/users?q=${encodeURIComponent('حساب فحص')}`,
+        { waitUntil: 'networkidle' });
+      const form = page.locator('form[action$="/role"]').first();
+      if (!await form.count()) return { at: page.url(), said: 'حساب الفحص مش ظاهر', ok: false };
+      await form.locator('select').selectOption('operator');
+      await form.locator('button[type=submit]').click();
+      await page.waitForLoadState('networkidle');
+      const said = await banner(page);
+
+      await page.goto(`${BASE}/admin/users?q=${encodeURIComponent('حساب فحص')}`,
+        { waitUntil: 'networkidle' });
+      const back = page.locator('form[action$="/role"]').first();
+      await back.locator('select').selectOption('resident');
+      await back.locator('button[type=submit]').click();
+      await page.waitForLoadState('networkidle');
+      return { at: page.url(), said };
+    } },
+];
+
+for (const a of (process.env.WALK_LIVE ? LIVE_ACTIONS : ACTIONS)) {
   const ctx = await browser.newContext({ viewport: PHONE, locale: 'ar-EG', deviceScaleFactor: 2 });
   await ctx.addCookies([{ name: 'qa_session', value: T[a.role].token, domain: '127.0.0.1', path: '/' }]);
   const page = await ctx.newPage();

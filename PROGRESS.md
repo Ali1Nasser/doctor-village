@@ -10,10 +10,46 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~726 checks green** (107 unit · 473 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
+| **Status** | 🟢 **~727 checks green** (107 unit · 474 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
 | **Last updated** | 2026-08-08 (session 33) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 34b — ⭐⭐ the same walk, against the DEPLOYED site
+
+*«اعمل نفس الفحص على الموقع المنشور نفسه.»*
+
+Chromium in this sandbox cannot open a socket to any HTTPS host — `https://example.com` fails the
+same way — but Node's `fetch` goes through fine. That had been recorded for two sessions as "the
+deployed site cannot be browser-tested". It is actually "the browser cannot open the socket", which
+is a different and much smaller problem: `tools/live-relay.mjs` forwards the deployed Worker to
+127.0.0.1 and hands its answers back **verbatim**, so a real browser drives production. The one
+thing it rewrites is `Secure` on `Set-Cookie`, because the browser is on plain HTTP for that hop.
+
+**It found two more blockers, both of which existed ONLY in production, and both of which had been
+there since the first deployment:**
+
+* **Step 2 of the payment wizard was empty on the live site, always.** `src/worker.ts` built the
+  category list by resolving an auth context from a **null token** — which correctly returns null,
+  so the guard never ran and the list was empty on every request the site ever served. Step 2 is
+  nothing but those tiles, and the tiles are the form's submit buttons. Locally it always worked,
+  because the local server has a real context to hand (R-124).
+* **Every receipt upload returned 500.** The separate receipts D1 database had `migrations/0008`
+  **never applied** — it held nothing but `_cf_KV` — so the storage-cap check died on
+  `no such table: v_blob_usage`. Locally both bindings point at the same file, which has everything
+  (R-125).
+
+Both fixed and verified by driving the real thing: a receipt sent from a browser on the deployed
+site, reviewed and closed. The live walk now reports **0 findings across 187 screenshots**.
+
+**The lesson:** *the entry point is code.* `src/worker.ts` had never been executed by anything but
+production, and neither had the second database's schema. Everything this project tests, it tests
+through `createApp` — which is not how the deployed site is assembled.
+
+Everything the live walk wrote was undone through the product rather than by SQL surgery, and
+recorded in R-127.
+
+---
 
 ### What changed in session 34 — ⭐⭐ walking the whole product in a browser
 
@@ -1873,7 +1909,7 @@ equation is a tautology and is demoted).
 ("Learned during the build") → `RISKS.md` (R-028 onward).
 
 **One command tells you if it still works:** `npm run verify` →
-**~726 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
+**~727 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
 access/audit/auth/onboarding/transparency/views + 48 ledger invariants + 34 demo checks + 12
 restore-drill checks + **41 screens rendered** + an axe-core WCAG 2.2 AA pass over all of them.
 If it is green, the security and money layers are intact. **It has never run in CI — there is

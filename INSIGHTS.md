@@ -1380,3 +1380,32 @@ The first walkthrough reported the drawer's top link as unclickable. The selecto
 never opened and `elementFromPoint` truthfully reported the banner underneath. **Before believing a
 tool that says the product is broken, check that the tool did the thing it claims to have done** —
 the fix was one selector, and the ten minutes spent theorising about z-index were wasted.
+
+**[2026-08-09] [ops] ⭐⭐ The deployed site had two blockers that no local run could ever produce.**
+The same walkthrough, pointed at production instead of localhost, found both in twenty minutes:
+
+  · `src/worker.ts` built the /pay category grid by calling
+    `resolveAuthContext(db, null, …)`. A null token has no context, so the guard `if (ctx)` never
+    ran and the list was empty on **every request the deployed site ever served**. Step 2 of the
+    wizard is nothing but that grid, and its tiles are the form's submit buttons — the payment
+    journey was stuck at «على إيه؟» in production, permanently, for everyone. Locally it worked
+    because the local server has a real context to hand.
+  · The **receipts D1 database was completely empty** — `migrations/0008` was never applied to it —
+    so every upload died on `no such table: v_blob_usage`. Locally the two databases are the same
+    file, which has everything.
+
+**Both live only in the wiring between the app and its environment**, which is exactly the code no
+test in this project covers and no local run exercises. The general rule: **the entry point is
+code**. `src/worker.ts` had never been executed by anything but production.
+
+**[2026-08-09] [agent] Chromium here cannot reach any HTTPS host; Node can.** Every navigation dies
+`ERR_CONNECTION_RESET`, `https://example.com` included, proxy configured or not. That had been read
+as "the deployed site cannot be browser-tested" for two sessions. It is actually "the browser cannot
+open the socket" — so a 60-line relay on 127.0.0.1 that forwards with `fetch` and returns the answer
+verbatim puts a real browser in front of production. **When a tool cannot reach something, ask which
+part of it cannot** — the fetch, or the render.
+
+**[2026-08-09] [ops] `Secure` on a cookie is a property of the hop, not of the app.** The relay had
+to strip it, because the browser is on `http://127.0.0.1` and drops `Secure` cookies there. Worth
+writing down as the *only* thing that was changed: a relay that quietly rewrites more than that
+stops being a test of production and nobody notices.

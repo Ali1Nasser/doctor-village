@@ -435,6 +435,12 @@ uploaded packs against this repo, twenty-seven sessions in.*
       reproduces the `.dump` failure first (the trigger refuses it, as predicted), then
       restores into a clean database and compares 14 figures including every account
       balance. Posting runs last, so the restore re-proves every entry balances.
+- [ ] ⚠️ **A deploy is not done until the migrations are applied to BOTH databases.**
+      `wrangler.toml` names one `migrations_dir` and two D1 bindings. `qaryat-atebaa-receipts`
+      went live with **no schema at all** — created, bound, and never migrated — so every
+      receipt upload returned 500 from the first deployment until 2026-08-09 (R-125). Nothing
+      detects this: no screen a board member opens touches `v_blob_usage`. Until `/admin/health`
+      checks for it (R-126), run one upload after every deploy.
 - [ ] Quota headroom review — every free limit at least 3× above current usage, documented
 - [ ] Arabic admin manual (PDF) incl. the account-recovery procedure
 - [ ] 60-second Arabic onboarding video script

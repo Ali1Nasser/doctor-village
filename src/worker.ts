@@ -34,9 +34,7 @@ import { createApp } from './app.js';
 import { SERVICE_WORKER } from './sw.js';
 import type { Db } from '../lib/db/driver.js';
 import { D1BlobStorage } from '../lib/storage/d1blob.js';
-import {
-  getCategoryNames, resolveAuthContext, setTokenHasher, recordQuotaSnapshot,
-} from '../lib/db/index.js';
+import { setTokenHasher, recordQuotaSnapshot } from '../lib/db/index.js';
 
 /**
  * Minimal Workers runtime types, declared here rather than depending on
@@ -113,22 +111,21 @@ export default {
     const receipts = env.RECEIPTS ?? db;
     const storage = new D1BlobStorage(receipts);
 
-    // The /pay category grid needs the income categories. Resolved per request
-    // rather than cached: a Worker isolate can live for hours, and a category
-    // renamed by an admin must not stay wrong on other people's screens until
-    // the isolate happens to recycle.
-    let payCategories: { id: string; nameAr: string; icon?: string }[] = [];
-    try {
-      const ctx = await resolveAuthContext(db, null, () => new Date().toISOString());
-      if (ctx) {
-        payCategories = (await getCategoryNames(ctx, db))
-          .filter(c => c.id.includes('IN'))
-          .map(c => ({ id: c.id, nameAr: c.name_ar, icon: c.icon ?? '•' }));
-      }
-    } catch {
-      // A category lookup failure must not take the whole site down; the pay
-      // screen degrades to an empty grid and every other screen is unaffected.
-    }
+    // ⭐ No `payCategories` here, deliberately — see the note in `src/app.ts`.
+    //
+    // This used to build the /pay step-2 grid by calling
+    // `resolveAuthContext(db, null, …)`. A null token has no context, so that
+    // call correctly returned null, the `if (ctx)` never ran, and the list was
+    // empty on **every request the deployed site ever served**. Step 2 is
+    // nothing but that grid, and its tiles are the form's submit buttons, so
+    // the payment journey was stuck at «على إيه؟» in production for everyone.
+    // Locally it worked, because the local server has a real context to hand —
+    // which is exactly why it survived until somebody drove the deployed site
+    // in a browser.
+    //
+    // Categories are per-request data about the person asking. The route reads
+    // them with the caller's own identity now, and nothing here pretends to
+    // know the answer before the request exists.
 
     const app = createApp({
       db,
@@ -136,7 +133,6 @@ export default {
       storage,
       storagePut: i => storage.put(i),
       storageUsedBytes: () => storage.usedBytes(),
-      payCategories,
       // C10: the demo banner is driven by the deployed environment, never by a
       // query parameter. A production database must never be able to render
       // "these figures are invented", and a demo one must never fail to.

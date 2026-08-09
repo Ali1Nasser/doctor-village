@@ -1249,7 +1249,23 @@ export function createApp(deps: AppDeps) {
     const settings = await data.getPaymentDetails(ctx, deps.db);
     return html(v.payPage({
       step,
-      categories: deps.payCategories ?? [],
+      // ⭐ Read with the CALLER's identity, not from a value computed at
+      // construction.
+      //
+      // `src/worker.ts` built `payCategories` by resolving an auth context from
+      // a **null token** — which correctly returns null, so the list was empty
+      // on every request the deployed site ever served. Step 2 of the wizard is
+      // nothing but those tiles, and the tiles are its submit buttons: the
+      // payment journey was stuck at «على إيه؟» in production, for everyone,
+      // permanently. Locally it worked, because the local server had an admin
+      // context to hand.
+      //
+      // Nothing at construction time can know who is asking, so nothing at
+      // construction time should be answering this. `deps.payCategories` stays
+      // as an override for tests and stays empty in production.
+      categories: deps.payCategories?.length
+        ? deps.payCategories
+        : await payCategoriesFor(ctx),
       bankDetailsMissing: !settings.instapay && !settings.bank && !settings.vodafone,
       bankDetails: settings,
       draft: {
@@ -1262,6 +1278,21 @@ export function createApp(deps: AppDeps) {
       gaps: drafts.draftGaps(d ?? null),
     }));
   });
+
+  /** The income categories a resident may pay against, for the step-2 grid.
+   *  Per request, because a category renamed by an admin must not stay wrong on
+   *  everybody else's screen until an isolate recycles. */
+  const payCategoriesFor = async (ctx: AuthContext) => {
+    try {
+      return (await data.getCategoryNames(ctx, deps.db))
+        .filter(x => x.id.includes('IN'))
+        .map(x => ({ id: x.id, nameAr: x.name_ar, icon: x.icon ?? '•' }));
+    } catch {
+      // A category lookup must not take the page down; the grid degrades to
+      // empty and the step above it still explains itself.
+      return [];
+    }
+  };
 
   app.post('/pay/:step', async c => {
     const ctx = need(c);
@@ -1276,7 +1307,8 @@ export function createApp(deps: AppDeps) {
       const parsed = parseMoney(s('amount') ?? '');
       if (!parsed.ok) {
         return html(v.payPage({ step: 1, error: parsed.messageAr,
-          categories: deps.payCategories ?? [] }), 400);
+          categories: deps.payCategories?.length
+            ? deps.payCategories : await payCategoriesFor(ctx) }), 400);
       }
       await drafts.saveDraft(ctx, deps.db, {
         amount_piastres: parsed.value,

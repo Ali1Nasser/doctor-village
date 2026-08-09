@@ -71,9 +71,15 @@ for (const [who, tok] of [[ADMIN, 'tok-admin'], [REVIEWER, 'tok-rev'], [RES, 'to
 const db = new NodeSqliteDb(raw as never);
 const NOW = () => '2026-08-09T10:00:00Z';
 const storage = new D1BlobStorage(db);
+/**
+ * ⚠️ No `payCategories` — on purpose, and it is the point of one test below.
+ *
+ * `src/worker.ts` passes none, so any fixture that hands them in is testing a
+ * wiring production does not have. That difference hid a blocker: step 2 of the
+ * payment wizard was empty on the deployed site for its entire life.
+ */
 const app = createApp({
   db, now: NOW, storage, demo: false,
-  payCategories: [{ id: 'CAT0000000000000000000IN01', nameAr: 'اشتراك سنوي', icon: '📅' }],
   rp: { id: 'x.test', name: 'x', origin: 'https://x.test' },
   storagePut: i => storage.put(i), storageUsedBytes: () => storage.usedBytes(),
 });
@@ -116,6 +122,29 @@ test('every step of the payment wizard has something to press', async () => {
   const five = await text('/pay/5', 'tok-res');
   assert.ok(/id="submit-btn"/.test(five) || /href="\/pay\/[1-4]"/.test(five),
     'step 5 offers neither a way to send nor a way back to what is missing');
+});
+
+/**
+ * ⭐ Step 2 of the wizard was EMPTY on the deployed site, always.
+ *
+ * `src/worker.ts` built the category list by resolving an auth context from a
+ * **null token**. That correctly returns null, so the list was never populated,
+ * and step 2 — which is nothing but those tiles, and whose tiles are the form's
+ * submit buttons — had nothing to press. The journey was stuck at «على إيه؟»
+ * in production for everyone, permanently.
+ *
+ * Every local run worked, because the local server had a real context to hand.
+ * Nothing caught it because no test built the app the way the Worker does:
+ * without `payCategories`. This one does, which is why the fixture above passes
+ * none.
+ */
+test('step 2 offers real categories with no help from the caller', async () => {
+  const form = formOf(await text('/pay/2', 'tok-res'), '/pay/2');
+  const tiles = form.match(/<button[^>]*name="category"[^>]*value="([^"]+)"/g) ?? [];
+  assert.ok(tiles.length > 0,
+    'the category grid is empty, so step 2 of the payment wizard cannot be passed');
+  // …and they are income categories, not every category in the chart.
+  for (const t of tiles) assert.match(t, /value="[A-Z0-9]*IN[0-9]+"/);
 });
 
 /**
