@@ -25,6 +25,7 @@ import * as pw from '../lib/auth/password.js';
 import { getChannel } from '../lib/auth/channel.js';
 import * as adb from '../lib/db/auth.js';
 import * as drafts from '../lib/db/drafts.js';
+import * as schema from '../lib/db/schema.js';
 import * as onboard from '../lib/db/onboarding.js';
 import * as fees from '../lib/db/fees.js';
 import * as settle from '../lib/db/settlements.js';
@@ -76,6 +77,16 @@ export interface AppDeps {
   storagePut?: (i: { key: string; body: Uint8Array; mime: string; unitId: string | null })
     => Promise<{ key: string; sizeBytes: number }>;
   storageUsedBytes?: () => Promise<number>;
+  /**
+   * The receipts D1 binding itself, for the schema check on `/admin/health`.
+   *
+   * `storage` is enough to read and write blobs; this is here so the health
+   * screen can ask the SECOND database whether it holds its schema — the
+   * question nobody was asking when it shipped empty and every upload 500'd
+   * for months (R-125). Omitted when there is only one database, which is the
+   * local case and a legitimate deployment.
+   */
+  receiptsDb?: Db;
   /** Web Push identity (Q23). Absent = push is off on this deployment, and the
    *  enable button is not rendered at all — a button that cannot work teaches
    *  the resident the site is broken rather than that a feature is off. */
@@ -1199,6 +1210,10 @@ export function createApp(deps: AppDeps) {
     ]);
     return html(v.healthPage({
       ...q,
+      // Deliberately not wrapped in a try: if this throws, the health screen
+      // itself is the thing that is broken and hiding that would be the same
+      // mistake twice.
+      schema: await schema.checkDeployedSchema(ctx, deps.db, deps.receiptsDb ?? null),
       evidence: await expenses.expensesWithoutEvidence(ctx, deps.db),
       push: {
         configured: vapid.configured, residents: reach.residents,
@@ -1211,6 +1226,19 @@ export function createApp(deps: AppDeps) {
 
   app.get('/api/health/quota', async c =>
     c.json(await data.getQuotaUsage(need(c), deps.db)));
+
+  /**
+   * The same schema check as JSON, so a deploy script can ask.
+   *
+   * R-125 sat in production undetected because the only thing that could see it
+   * was a resident pressing a button. One `curl` after `wrangler deploy` closes
+   * that, and a machine-readable answer is what makes that one line possible.
+   */
+  app.get('/api/health/schema', async c => {
+    const reports = await schema.checkDeployedSchema(need(c), deps.db, deps.receiptsDb ?? null);
+    const ok = reports.every(r => !r.unreachable && r.missing.length === 0);
+    return c.json({ ok, databases: reports }, ok ? 200 : 503);
+  });
 
   app.get('/payments', async c => {
     const ctx = c.get('ctx');

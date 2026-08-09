@@ -133,6 +133,9 @@ export default {
       storage,
       storagePut: i => storage.put(i),
       storageUsedBytes: () => storage.usedBytes(),
+      // The second binding itself, so `/admin/health` can ask it whether it
+      // holds its schema. It shipped empty once (R-125) and nothing noticed.
+      receiptsDb: receipts,
       // C10: the demo banner is driven by the deployed environment, never by a
       // query parameter. A production database must never be able to render
       // "these figures are invented", and a demo one must never fail to.

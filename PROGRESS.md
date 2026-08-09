@@ -10,10 +10,39 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~727 checks green** (107 unit · 474 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
+| **Status** | 🟢 **~735 checks green** (107 unit · 482 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
 | **Last updated** | 2026-08-08 (session 33) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 34c — the health check for the migrations
+
+*«اعمل الـhealth check اللي قولت عليه عشان الميجريشن.»* R-126, closed.
+
+`/admin/health` now asks **each deployed database** whether it holds every table, view and trigger
+the app needs, and names what is missing. `GET /api/health/schema` answers the same as JSON and
+returns **503** when anything is absent, so one `curl` after `wrangler deploy` catches what R-125
+took months to surface.
+
+Three decisions worth keeping:
+
+* **The expected list is generated, not written.** `npm run gen:schema` derives it from
+  `migrations/`, and `tests/access/schema.test.ts` regenerates it and fails on drift — so a new
+  migration cannot land without the check learning about it. A hand-kept array would have gone quiet
+  on exactly the migration somebody forgot.
+* **It replays the migrations rather than grepping them.** `0026` rebuilds `auth_attempts` by
+  creating `auth_attempts_new`, dropping the original and renaming; a grep for `CREATE TABLE` would
+  expect a table that does not exist and flag a healthy database forever, which is how people learn
+  to ignore a health screen.
+* **Triggers are in the list, and the screen explains why.** A missing table breaks the query; a
+  missing trigger lets the write succeed with the rule silently gone. Every control this project put
+  in the schema rather than in TypeScript (ADR-024) depends on the trigger being there, so the screen
+  calls them «قواعد حماية» and says what their absence means.
+
+8 tests, including the receipts database reproduced exactly as it shipped — empty. Verified on the
+deployed site: ledger 154/154, receipts 2/2, and a resident asking gets 403.
+
+---
 
 ### What changed in session 34b — ⭐⭐ the same walk, against the DEPLOYED site
 
@@ -1909,7 +1938,7 @@ equation is a tautology and is demoted).
 ("Learned during the build") → `RISKS.md` (R-028 onward).
 
 **One command tells you if it still works:** `npm run verify` →
-**~727 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
+**~735 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
 access/audit/auth/onboarding/transparency/views + 48 ledger invariants + 34 demo checks + 12
 restore-drill checks + **41 screens rendered** + an axe-core WCAG 2.2 AA pass over all of them.
 If it is green, the security and money layers are intact. **It has never run in CI — there is

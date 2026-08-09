@@ -1409,3 +1409,22 @@ part of it cannot** — the fetch, or the render.
 to strip it, because the browser is on `http://127.0.0.1` and drops `Secure` cookies there. Worth
 writing down as the *only* thing that was changed: a relay that quietly rewrites more than that
 stops being a test of production and nobody notices.
+
+**[2026-08-09] [ops] A check needs a list, and a hand-kept list goes quiet exactly when it matters.**
+`/admin/health` can only report a missing table if it knows which tables should exist. Writing that
+array by hand guarantees that the day somebody adds a migration and forgets to update it is the day
+the check stops covering the new thing — silently, and with a green tick. So the manifest is
+**generated** from `migrations/` and a test regenerates it and fails on drift. Same shape as
+`MUTATING_FUNCTIONS`: the mechanism, not the intention (ADR-010).
+
+**[2026-08-09] [ops] Replay the migrations, do not grep them.** `0026` rebuilds `auth_attempts` by
+creating `auth_attempts_new`, dropping the original and renaming. A grep for `CREATE TABLE` reports a
+table that does not exist, so a healthy database would have been flagged broken forever — the exact
+failure mode that teaches people to ignore a health screen. The generator replays CREATE / DROP /
+RENAME in file order and keeps the set current, which is what the database itself ends up holding.
+
+**[2026-08-09] [ops] `wrangler deploy` returns before the new version is serving.** Checking the
+live site immediately after a deploy returned the PREVIOUS bundle — the new section absent, the new
+route a 404 — and the same check twenty seconds later was correct. That looked exactly like the
+stale-bundle bug from two sessions ago and is not it. **Wait and re-check before concluding a deploy
+did not take**, or a real regression and ordinary propagation are indistinguishable.

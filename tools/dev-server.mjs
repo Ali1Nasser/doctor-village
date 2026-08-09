@@ -110,6 +110,13 @@ const app = createApp({
   db, now: NOW, storage, demo: true, payCategories: cats,
   rp: { id: 'localhost', name: 'بوابة قرية الأطباء', origin: `http://localhost:${PORT}` },
   storagePut: i => storage.put(i), storageUsedBytes: () => storage.usedBytes(),
+  // Locally the two bindings are the same file, so the health screen would
+  // report one healthy database twice. `WALK_BREAK_RECEIPTS=1` hands it an
+  // empty one instead — the receipts database exactly as it shipped (R-125) —
+  // so the alarm can be looked at rather than imagined.
+  receiptsDb: process.env.WALK_BREAK_RECEIPTS
+    ? new NodeSqliteDb(new DatabaseSync(':memory:'))
+    : undefined,
 });
 
 /** Everything a driver script needs to log in as somebody, in one fetch. */

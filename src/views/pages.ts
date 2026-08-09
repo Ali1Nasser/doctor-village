@@ -903,6 +903,15 @@ export function healthPage(d: {
     configured: boolean; residents: number; reachable: number; dead: number;
     fingerprint: string | null; recorded: string | null; mismatch: boolean;
   };
+  /** ⭐ R-125/R-126: is every table, view and trigger the app needs actually
+   *  IN each deployed database? The receipts database shipped empty and
+   *  nothing said so until a resident pressed a button. */
+  schema?: {
+    database: 'ledger' | 'receipts';
+    missing: { kind: 'table' | 'view' | 'trigger'; name: string }[];
+    expected: number;
+    unreachable: boolean;
+  }[];
   demo?: boolean;
 }): string {
   const rows = d.rows.map(r => {
@@ -927,6 +936,47 @@ export function healthPage(d: {
 </div>`;
   }).join('');
 
+  const KIND_AR = { table: t.health.schemaKindTable, view: t.health.schemaKindView,
+                    trigger: t.health.schemaKindTrigger };
+  const DB_AR = { ledger: t.health.schemaLedger, receipts: t.health.schemaReceipts };
+
+  /**
+   * One row per database. A missing TRIGGER is called out separately, because
+   * it is the only failure here that does not announce itself: the query
+   * succeeds, the row is written, and the rule that was supposed to refuse it
+   * is simply not there.
+   */
+  const schemaBlock = !d.schema?.length ? '' : `
+<h2>${esc(t.health.schemaTitle)}</h2>
+<p class="muted">${esc(t.health.schemaIntro)}</p>
+<div class="card">
+  ${d.schema.map(sc => {
+    const n = sc.missing.length;
+    const triggers = sc.missing.filter(m => m.kind === 'trigger').length;
+    return `
+  <div class="q-row">
+    <div class="q-head">
+      <span class="q-svc">${esc(DB_AR[sc.database])}</span>
+      <span class="q-un"><span class="chip ${sc.unreachable || n ? 'danger' : 'ok'}">${
+        esc(sc.unreachable ? t.health.danger : n ? t.health.danger : t.health.ok)}</span></span>
+    </div>
+    ${sc.unreachable
+      ? `<div class="banner warn" style="margin-block-end:0">${esc(t.health.schemaUnreachable)}</div>`
+      : n === 0
+        ? `<div class="q-un">${msgHtml(esc(t.health.schemaOk), { n: num(sc.expected) })}</div>`
+        : `<div class="banner warn">${msgHtml(esc(t.health.schemaMissing), {
+             n: num(n), total: num(sc.expected) })}</div>
+           ${triggers > 0 ? `<p class="hint">${esc(t.health.schemaWhyTriggers)}</p>` : ''}
+           <ul class="hint" style="padding-inline-start:18px">
+             ${sc.missing.slice(0, 12).map(m =>
+               `<li>${esc(KIND_AR[m.kind])} — <bdi dir="ltr" class="num">${esc(m.name)}</bdi></li>`).join('')}
+             ${n > 12 ? `<li>… <bdi dir="ltr" class="num">${esc(String(n - 12))}</bdi></li>` : ''}
+           </ul>
+           <p class="hint">${esc(t.health.schemaFix)}</p>`}
+  </div>`;
+  }).join('')}
+</div>`;
+
   const banner = d.overThreshold === 0
     ? `<div class="banner ok">✅ ${esc(t.health.okNote)}</div>`
     : `<div class="banner warn">⚠️ ${msgHtml(esc(t.health.warnNote), { n: num(d.overThreshold) })}</div>`;
@@ -937,6 +987,7 @@ export function healthPage(d: {
 ${banner}
 ${d.capOnFile ? '' : `<div class="banner ok">${esc(t.health.noCard)}</div>`}
 <div class="card">${rows}</div>
+${schemaBlock}
 ${d.evidence ? `<h2>${esc(t.health.evidenceTitle)}</h2>
 <div class="card">
   ${d.evidence.count === 0
