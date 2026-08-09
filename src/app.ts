@@ -201,7 +201,9 @@ export function createApp(deps: AppDeps) {
   app.post('/api/payments', async c => {
     const ctx = need(c);
     const b = await c.req.json();
-    const id = data.newId('PAY') as never;
+    // Prefix matched to the database, same as `submitReceipt` — otherwise this
+    // route is refused outright by `trg_no_real_payments_in_demo`.
+    const id = await data.newIdHere(deps.db, 'PAY') as never;
     await data.createPayment(ctx, deps.db, {
       id,
       receiptNo: b.receiptNo,
@@ -368,7 +370,10 @@ export function createApp(deps: AppDeps) {
       [null, '/search', '🔎', _t.search.title],
     ]);
     push(_t.shell.groupBoard, [
-      ['payment.review', '/admin/review', '✅', _t.admin.queueTitle],
+      // Gated on what the SCREEN requires (`payment.read_any`), not on what its
+      // buttons require. Gating on `payment.review` meant a finance_reviewer —
+      // who may read the queue and audit it — had no link to it anywhere.
+      ['payment.read_any', '/admin/review', '✅', _t.admin.queueTitle],
       ['payment.read_any', '/admin/payments', '🧾', _t.admin.approvedTitle],
       ['expense.record', '/admin/expenses', '💸', _t.expenses.title],
       ['fee.manage', '/admin/fees', '📅', _t.fees.title],
@@ -1337,7 +1342,7 @@ export function createApp(deps: AppDeps) {
       transferDate: String(r['transfer_date']), categoryAr: String(r['category_ar']),
       buildingCode: String(r['building_code']), unitNumber: String(r['unit_number']),
       referenceNo: r['reference_no'] as string | null, noteAr: r['note_ar'] as string | null,
-    })), warn, deps.demo));
+    })), warn, deps.demo, undefined, undefined, can(ctx.role, 'payment.review')));
   });
 
   /**
@@ -1362,7 +1367,8 @@ export function createApp(deps: AppDeps) {
       transferDate: String(r['transfer_date']), categoryAr: String(r['category_ar']),
       buildingCode: String(r['building_code']), unitNumber: String(r['unit_number']),
       referenceNo: r['reference_no'] as string | null, noteAr: r['note_ar'] as string | null,
-    })), await data.singleAdminWarning(ctx, deps.db), deps.demo, flash, error);
+    })), await data.singleAdminWarning(ctx, deps.db), deps.demo, flash, error,
+      can(ctx.role, 'payment.review'));
   };
 
   app.post('/admin/review/:id', async c => {
@@ -1458,7 +1464,10 @@ export function createApp(deps: AppDeps) {
     const sha = await sha256Bytes(clean.bytes);
     const dup = await data.findDuplicateReceipt(ctx, deps.db, sha, b.amountPiastres, b.transferDate);
 
-    const id = data.newId('PAY');
+    // Not `newId('PAY')`: on the demo database that id is refused by
+    // `trg_no_real_payments_in_demo`, which made submitting a receipt
+    // impossible on the deployment the board is actually shown.
+    const id = await data.newIdHere(deps.db, 'PAY');
     const ext = clean.mime.slice('image/'.length);
     const key = `receipts/${b.unitId}/${id}.${ext}`;
     await deps.storagePut({ key, body: clean.bytes, mime: clean.mime, unitId: b.unitId });
@@ -1794,20 +1803,37 @@ export function createApp(deps: AppDeps) {
 
   /* ---- admin: publishing ------------------------------------------------- */
 
-  async function adminContentScreen(ctx: AuthContext, error?: string) {
+  async function adminContentScreen(ctx: AuthContext, error?: string, flash?: string) {
     return cv.adminContentPage({
       drafts: [],
       published: await content.listPosts(ctx, deps.db, { limit: 30 }),
       albums: await content.listAlbums(ctx, deps.db),
       canPublishMinutes: can(ctx.role, 'minutes.publish'),
-      error,
+      error, flash,
     });
   }
+
+  /**
+   * The success message rides in the QUERY, because publishing answers with a
+   * redirect and a redirect has nowhere to carry a flash.
+   *
+   * Rendering the confirmation on the POST response instead would leave the
+   * browser one refresh away from publishing the same announcement twice —
+   * which is why the redirect is there in the first place. A closed set of
+   * keys, never the caller's text, so this cannot become a way to print an
+   * arbitrary sentence on a board screen from a link.
+   */
+  const CONTENT_FLASH: Record<string, string> = {
+    published: _t.content.published,
+    pinned: _t.content.pinnedOk,
+    unpinned: _t.content.unpinnedOk,
+  };
 
   app.get('/admin/content', async c => {
     const ctx = need(c);
     if (!can(ctx.role, 'post.publish')) throw new Forbidden('post.publish');
-    return html(await adminContentScreen(ctx));
+    return html(await adminContentScreen(ctx, undefined,
+      CONTENT_FLASH[c.req.query('ok') ?? '']));
   });
 
   app.post('/admin/content', async c => {
@@ -1824,16 +1850,15 @@ export function createApp(deps: AppDeps) {
       if (e instanceof Forbidden) return html(await adminContentScreen(ctx, e.reasonAr), 403);
       throw e;
     }
-    return c.redirect('/admin/content', 303);
+    return c.redirect('/admin/content?ok=published', 303);
   });
 
   app.post('/admin/content/:id/pin', async c => {
     const ctx = need(c);
     const f = await c.req.parseBody();
-    await content.setPinned(
-      ctx, deps.db, c.req.param('id') as never, String(f['pinned']) === '1', deps.now,
-    );
-    return c.redirect('/admin/content', 303);
+    const pinned = String(f['pinned']) === '1';
+    await content.setPinned(ctx, deps.db, c.req.param('id') as never, pinned, deps.now);
+    return c.redirect(`/admin/content?ok=${pinned ? 'pinned' : 'unpinned'}`, 303);
   });
 
   /* ---- members & first activation --------------------------------------- */

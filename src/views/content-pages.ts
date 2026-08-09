@@ -417,14 +417,19 @@ export function adminContentPage(d: {
   albums: AlbumSummary[];
   canPublishMinutes: boolean;
   error?: string;
+  /** ⭐ Publishing used to redirect to a page that said nothing at all, so the
+   *  board member's own announcement was somewhere down a list of thirty and
+   *  the screen gave no sign anything had happened. */
+  flash?: string;
 }): string {
   return page({ title: t.content.manage, active: 'news' }, `
 <div class="card">
   <h2 style="margin-block-start:0">✍️ ${esc(t.content.title)}</h2>
   ${d.error ? `<div class="banner warn">${esc(d.error)}</div>` : ''}
+  ${d.flash ? `<div class="banner ok">${esc(d.flash)}</div>` : ''}
   <form method="post" action="/admin/content">
     <div class="field">
-      <label for="pt">${esc(t.content.tabs.all)}</label>
+      <label for="pt">${esc(t.content.postType)}</label>
       <select id="pt" name="type" required>
         <option value="announcement">${esc(t.content.tabs.announcement)}</option>
         <option value="news">${esc(t.content.tabs.news)}</option>
@@ -434,12 +439,14 @@ export function adminContentPage(d: {
       </select>
     </div>
     <div class="field">
-      <label for="ptitle">${esc(t.maintenance.titleLabel)}</label>
+      <label for="ptitle">${esc(t.content.postTitle)}</label>
       <input id="ptitle" name="title" required maxlength="160">
     </div>
     <div class="field">
-      <label for="pbody">${esc(t.maintenance.detailsLabel)}</label>
-      <textarea id="pbody" name="body" rows="6" maxlength="8000"></textarea>
+      <label for="pbody">${esc(t.content.postBody)}</label>
+      <textarea id="pbody" name="body" rows="6" maxlength="8000"
+                aria-describedby="pbody-h"></textarea>
+      <p class="hint" id="pbody-h">${esc(t.content.postBodyHint)}</p>
     </div>
     <label class="check">
       <input type="checkbox" name="pin" value="1"> ${esc(t.content.pinned)}
@@ -449,7 +456,7 @@ export function adminContentPage(d: {
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0">${esc(t.content.tabs.all)}</h3>
+  <h3 style="margin-block-start:0">${esc(t.content.publishedList)}</h3>
   ${d.published.length === 0
     ? emptyWithHint('📭', t.content.empty, t.content.emptyHint)
     : d.published.map(p => `

@@ -31,6 +31,7 @@ const UPLOAD_MSGS = {
   compressing: t.pay.compressing, ready: t.app.confirm, tooBig: t.pay.errors.tooBig,
   failed: t.states.errorBody, working: t.app.loading,
   submit: t.pay.submit, needImage: t.pay.errors.image,
+  photoMissingBack: t.pay.photoMissingBack, backToPhoto: t.pay.backToPhoto,
 };
 
 /* ===================================================================== */
@@ -360,6 +361,18 @@ export function payPage(d: PayStepData): string {
     `<i class="${i < d.step ? 'on' : ''}"></i>`).join('');
 
   const body = {
+    // ⭐ Steps 1 and 4 had NO submit control at all — found by driving the
+    // wizard in a browser rather than reading the markup.
+    //
+    // Step 1 is one text input, so a desktop browser will implicitly submit on
+    // Enter and the bug is invisible there. On the phone this village actually
+    // uses, `inputmode="decimal"` produces a numeric keypad with **no Enter
+    // key**, so the resident types the amount and there is nothing to press.
+    // Step 4 is worse: three fields means implicit submission does not apply at
+    // all, on any device, so the wizard could not be finished by anyone.
+    //
+    // This is the central journey of the whole product. Both steps now carry a
+    // «التالي» the thumb can find.
     1: `
     <div class="field">
       <label for="amount">${esc(t.pay.amountLabel)}</label>
@@ -367,7 +380,8 @@ export function payPage(d: PayStepData): string {
              placeholder="0.00" required aria-describedby="amount-hint"
              value="${d.draft?.amountPiastres != null ? esc((d.draft.amountPiastres / 100).toFixed(2)) : ''}">
       <p class="hint" id="amount-hint">${esc(t.pay.amountHint)}</p>
-    </div>`,
+    </div>
+    <button class="btn" type="submit">${esc(t.app.next)} ←</button>`,
     2: `
     <p class="muted">${esc(t.pay.categoryHint)}</p>
     <div class="grid-cats">
@@ -375,17 +389,22 @@ export function payPage(d: PayStepData): string {
         `<button class="cat" type="submit" name="category" value="${esc(c.id)}">
            <span aria-hidden="true">${esc(c.icon ?? '•')}</span>${esc(c.nameAr)}</button>`).join('')}
     </div>`,
+    // The date comes FIRST because the method tiles are the submit buttons: a
+    // resident who taps «إنستا باي» with the date still empty gets the
+    // browser's own validation bounce, which reads as the button not working.
+    // Filling the page top to bottom now matches the order it submits in.
     3: `
+    <div class="field">
+      <label for="tdate">${esc(t.pay.transferDate)}</label>
+      <input id="tdate" name="transfer_date" type="date" required
+             value="${esc(d.draft?.date ?? '')}">
+    </div>
+    <p class="muted">${esc(t.pay.step3)}</p>
     <div class="grid-cats">
       ${[['instapay', t.pay.methodInstapay, '📱'], ['bank_transfer', t.pay.methodBank, '🏦'],
          ['vodafone_cash', t.pay.methodVodafone, '📲'], ['cash', t.pay.methodCash, '💵']]
         .map(([v, l, i]) => `<button class="cat" type="submit" name="method" value="${esc(v)}">
            <span aria-hidden="true">${i}</span>${esc(l)}</button>`).join('')}
-    </div>
-    <div class="field" style="margin-block-start:16px">
-      <label for="tdate">${esc(t.pay.transferDate)}</label>
-      <input id="tdate" name="transfer_date" type="date" required
-             value="${esc(d.draft?.date ?? '')}">
     </div>
     <div class="card">
       <strong>${esc(t.pay.transferDetails)}</strong>
@@ -404,7 +423,13 @@ export function payPage(d: PayStepData): string {
       <label for="receipt-file">${esc(t.pay.step4)}</label>
       <!-- capture= opens the camera directly. Without it an elderly user lands
            in a file browser and gives up; both paths feed the same input. -->
-      <input id="receipt-file" name="receipt" type="file" accept="image/*" capture="environment">
+      <input id="receipt-file" name="receipt" type="file" accept="image/*" capture="environment"
+             aria-describedby="receipt-req">
+      <!-- ⭐ The photo is mandatory and this screen never said so. The only
+           place that mentioned it was an error AFTER «تأكيد الإرسال» on the
+           next step — so a resident filled in five steps and was refused at the
+           end for something nobody had asked them for. -->
+      <p class="hint" id="receipt-req"><strong>${esc(t.pay.photoRequired)}</strong></p>
       <p class="hint">${esc(t.pay.compressing)}</p>
     </div>
     <img id="receipt-preview" alt="" hidden
@@ -418,7 +443,8 @@ export function payPage(d: PayStepData): string {
     <div class="field">
       <label for="note">${esc(t.pay.note)}</label>
       <textarea id="note" name="note" rows="2"></textarea>
-    </div>`,
+    </div>
+    <button class="btn" type="submit">${esc(t.app.next)} ←</button>`,
     5: `
     <table><tbody>
       <tr><th>${esc(t.pay.amountLabel)}</th><td class="n">${d.draft?.amountPiastres != null ? money(d.draft.amountPiastres) : '—'}</td></tr>
@@ -639,15 +665,30 @@ export interface ReviewItem {
   referenceNo?: string | null; noteAr?: string | null;
 }
 
+/**
+ * ⭐ `canReview` decides whether this is a QUEUE or a WINDOW.
+ *
+ * `listReviewQueue` requires `payment.read_any`; approving requires
+ * `payment.review`. Those are not the same set — a `finance_reviewer` holds the
+ * first and deliberately not the second, because "reviewing" in their job means
+ * auditing, not approving (03_RBAC). The page ignored the difference and drew
+ * اعتماد / رفض / محتاج معلومات on all forty-two receipts for them.
+ *
+ * Found by pressing the button as a finance_reviewer: a 403. That is the worst
+ * shape a permission can take — the product tells somebody they may, and then
+ * tells them they may not, and they have no way to know which of the two is the
+ * bug. The control is now simply absent, and the page says what it is instead.
+ */
 export function reviewPage(
   items: ReviewItem[], singleAdmin: boolean, demo?: boolean,
-  flash?: string, error?: string,
+  flash?: string, error?: string, canReview = true,
 ): string {
   return page({ title: t.admin.queueTitle, showNav: false, demo }, `
 ${singleAdmin ? `<div class="banner warn">${esc(t.admin.singleAdminWarning)}</div>` : ''}
 ${error ? `<div class="banner warn">${esc(error)}</div>` : ''}
 ${flash ? `<div class="banner ok">${esc(flash)}</div>` : ''}
-<h2>${esc(t.admin.queueTitle)}</h2>
+${canReview ? '' : `<div class="banner info">${esc(t.admin.auditOnly)}</div>`}
+<h2>${esc(canReview ? t.admin.queueTitle : t.admin.queueAuditTitle)}</h2>
 ${items.length === 0
   ? emptyState('✅', t.admin.queueEmpty)
   : `<p class="muted">${msgHtml(esc(t.admin.pendingCount), { n: num(items.length) })}</p>
@@ -659,6 +700,7 @@ ${items.map(p => `
   <div class="muted">${esc(p.categoryAr)} · ${arDate(p.transferDate)} · ${num(p.receiptNo)}
     ${p.referenceNo ? `· ${esc(t.pay.referenceNo)} ${num(p.referenceNo)}` : ''}</div>
   ${p.noteAr ? `<p class="muted">«${esc(p.noteAr)}»</p>` : ''}
+  ${!canReview ? '' : `
   <form method="post" action="/admin/review/${esc(p.id)}">
     <button class="btn" name="kind" value="approve">${esc(t.admin.approve)}</button>
     <div class="field" style="margin-block-start:12px">
@@ -676,7 +718,7 @@ ${items.map(p => `
     <button class="btn btn-2" name="kind" value="need_info">${esc(t.admin.needInfo)}</button>
     <button class="btn btn-danger" name="kind" value="reject">${esc(t.admin.reject)}</button>
   </form>
-  <p class="hint">${esc(t.admin.undoWindow)}</p>
+  <p class="hint">${esc(t.admin.undoWindow)}</p>`}
 </div>`).join('')}`}`);
 }
 

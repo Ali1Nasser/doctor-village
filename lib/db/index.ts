@@ -124,6 +124,33 @@ export async function getOwnPhone(ctx: AuthContext, db: Db): Promise<string | nu
 }
 
 /**
+ * ⭐ An id whose prefix matches the database it is about to be written into.
+ *
+ * `migrations/0006` guards both directions: a production database refuses ids
+ * beginning `DEMO`, and a **demo database refuses ids that do not** —
+ * `trg_no_real_payments_in_demo`, which exists so real money can never be
+ * posted into a rehearsal database and later mistaken for one.
+ *
+ * The app minted `PAY…` unconditionally, so on the demo deployment the trigger
+ * fired on every submission and the single most important journey in the
+ * product — a resident sending a receipt — ended with a database sentence,
+ * half of it in English. Found by driving the wizard to its last button in a
+ * browser; no test reached it, because the tests run against a database whose
+ * `env_guard` says `test`.
+ *
+ * Reading the environment here rather than passing a flag down from the route
+ * is deliberate: the id then matches the database **by construction**, so this
+ * cannot drift out of step with the trigger the way a flag threaded through
+ * four call sites can. A rehearsal receipt is also permanently self-labelling,
+ * which is the whole point of the prefix convention.
+ */
+export async function newIdHere(db: Db, prefix: string): Promise<string> {
+  const row = await db.prepare(`SELECT environment FROM env_guard WHERE id = 1`)
+    .first<{ environment: string }>();
+  return newId(row?.environment === 'demo' ? `DEMO${prefix}` : prefix);
+}
+
+/**
  * How many printed recovery codes the caller still has.
  *
  * A count, never the codes — those exist only as hashes, and the number is the

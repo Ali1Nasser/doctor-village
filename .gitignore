@@ -6,3 +6,7 @@ data/*.db-wal
 data/*.db-shm
 data/vapid.json
 .wrangler/
+
+# The browser walkthrough's output: ~190 screenshots and a 7 MB PDF, regenerated
+# by `npm run walk` whenever it is needed. Evidence, not source.
+walkthrough/

@@ -550,9 +550,10 @@ header .htext{flex:1;min-inline-size:0}
 <div class="card">
   <h2 style="margin-block-start:0">✍️ أخبار القرية</h2>
   
+  
   <form method="post" action="/admin/content">
     <div class="field">
-      <label for="pt">الكل</label>
+      <label for="pt">نوع المنشور</label>
       <select id="pt" name="type" required>
         <option value="announcement">إعلانات</option>
         <option value="news">أخبار</option>
@@ -562,12 +563,14 @@ header .htext{flex:1;min-inline-size:0}
       </select>
     </div>
     <div class="field">
-      <label for="ptitle">المشكلة في إيه؟</label>
+      <label for="ptitle">العنوان</label>
       <input id="ptitle" name="title" required maxlength="160">
     </div>
     <div class="field">
-      <label for="pbody">تفاصيل زيادة (اختياري)</label>
-      <textarea id="pbody" name="body" rows="6" maxlength="8000"></textarea>
+      <label for="pbody">النص</label>
+      <textarea id="pbody" name="body" rows="6" maxlength="8000"
+                aria-describedby="pbody-h"></textarea>
+      <p class="hint" id="pbody-h">اكتبه بالعربي زي ما بتتكلّم. اللي هيقراه ساكن مش موظف.</p>
     </div>
     <label class="check">
       <input type="checkbox" name="pin" value="1"> مثبّت
@@ -577,7 +580,7 @@ header .htext{flex:1;min-inline-size:0}
 </div>
 
 <div class="card">
-  <h3 style="margin-block-start:0">الكل</h3>
+  <h3 style="margin-block-start:0">اللي اتنشر</h3>
   
   <div class="row">
     <span class="ico" aria-hidden="true">📣</span>

@@ -1348,3 +1348,35 @@ in-process test passed; the migration applied; the pages rendered; a wrong-passw
 the right 401 — because that path returns before it ever hashes anything. Only issuing a real
 password on the real Worker executed PBKDF2 in production. **A verification that never exercises the
 expensive path is not a verification of the expensive path.**
+
+**[2026-08-09] [testing] ⭐⭐ Three green suites and the payment wizard could not be completed.**
+`npm run screens` proved the server emits the HTML. `npm run a11y` proved that HTML has no axe
+violations. The access tests proved the right roles reach the right routes. **Steps 1 and 4 of the
+payment wizard had no submit button**, and all three stayed green — because none of them asks *is
+there a way forward from this screen*. A fourth kind of check was missing and now exists
+(`tools/walkthrough.mjs` + `tests/access/journeys.test.ts`): drive the product in a browser as every
+role and assert on the SHAPE of each screen — a control to press, controls offered only to the
+people they work for, wording that belongs to the screen it is on.
+
+**[2026-08-09] [testing] The test database was not the deployed database, and that hid a blocker.**
+Every suite runs with `env_guard = 'test'`. The demo deployment runs with `'demo'`, where
+`trg_no_real_payments_in_demo` refuses any payment id not starting `DEMO` — so on the site the board
+is actually shown, **no resident could send a receipt at all**, and the failure was the trigger's own
+sentence with an English half. The control was right; the app minted the wrong prefix. **A fixture
+that differs from production in one enum value is a fixture that cannot see a whole class of bug** —
+`tests/access/journeys.test.ts` now runs as `'demo'` on purpose.
+
+**[2026-08-09] [ux] «القائمة بتعرضه، والتطبيق بيرفضه» is the worst shape a permission can take.**
+The review queue drew اعتماد / رفض on forty-two receipts for a `finance_reviewer`, whose whole role
+is to audit and never approve; pressing one answered 403. The menu, meanwhile, gated the screen on
+the capability its BUTTONS need, so the person who may read it had no link to it anywhere. Two
+different mistakes with one cause: **the screen's capability and its controls' capabilities were
+assumed to be the same set.** There is now a general test — for every role, every href in their own
+menu must answer < 400.
+
+**[2026-08-09] [agent] A false positive from my own test cost more than the bug it reported.**
+The first walkthrough reported the drawer's top link as unclickable. The selector
+`.menu-btn, [aria-controls="drawer"], header button` had matched the theme toggle, so the drawer
+never opened and `elementFromPoint` truthfully reported the banner underneath. **Before believing a
+tool that says the product is broken, check that the tool did the thing it claims to have done** —
+the fix was one selector, and the ten minutes spent theorising about z-index were wasted.

@@ -262,6 +262,27 @@ ${HELPERS}
 (function () {
   const btn = document.getElementById('submit-btn');
   if (!btn) return;
+
+  // ⭐ Say it on ARRIVAL, not on the press.
+  //
+  // The image lives in sessionStorage, so draftGaps — which runs on the
+  // server and drives every other "go back to step N" on this screen — cannot
+  // see it. That left the photo as the one requirement announced by failing:
+  // (no backticks in here: this whole block is inside a TS template literal)
+  // the resident reviewed a complete-looking summary, pressed «تأكيد الإرسال»,
+  // and only then learned a photo was needed. Same treatment as the other
+  // gaps now: the missing thing is named the moment the step opens, and the
+  // button that cannot work is not offered.
+  if (!sessionStorage.getItem('pay-draft-img')) {
+    say(null, MSG.photoMissingBack, 'warn');
+    const back = document.createElement('a');
+    back.className = 'btn btn-2';
+    back.href = '/pay/4';
+    back.textContent = MSG.backToPhoto + ' ←';
+    btn.replaceWith(back);
+    return;
+  }
+
   btn.addEventListener('click', async () => {
     const img = sessionStorage.getItem('pay-draft-img');
     if (!img) { say(null, MSG.needImage, 'warn'); return; }

@@ -10,10 +10,48 @@
 | | |
 |---|---|
 | **Checkpoint** | CP-5 gates met · CP-6 done · CP-7 statement+a11y+quiet-hours+EXIF done · CP-8 restore gate MET |
-| **Status** | 🟢 **~716 checks green** (107 unit · 463 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
+| **Status** | 🟢 **~726 checks green** (107 unit · 473 access · 48 ledger invariants · 34 demo · 12 restore-drill · 2 lint · typecheck · **41 screens** · **0 WCAG violations across 84 page-scans, 360px and 1100px**). ✅ **The deployed Worker is current** (redeployed 2026-08-08, version `0c661b6b`) and migration `0026` is applied to the live D1. The password and recovery-code flows were driven end-to-end on the live site. |
 | **Last updated** | 2026-08-08 (session 33) |
 | **Updated by** | agent |
 | **Blocked?** | **Not blocked for building.** Everything still open needs a *person*, not a commit: an accountant's sign-off on the chart of accounts and the الوديعة treatment, a lawyer on the privacy notice (PDPL 151/2020), the board's real register, and an elderly resident to watch. |
+
+### What changed in session 34 — ⭐⭐ walking the whole product in a browser
+
+The owner asked for the obvious thing nobody had done: *«ادخل على الأبليكيشن واعمل كل السيناريوهات
+المتاحة بكل الـroles وشوف هل فيه أي مشاكل».*
+
+Two new tools, both in `package.json`: `npm run dev:demo` boots the **real** app on a real port
+against the demo village with a session per role, and `npm run walk` drives it in Chromium as each
+of the six audiences — every screen in every role's menu, plus the journeys that matter: submit a
+receipt, approve one, reject one with a reason, record an expense, create an account, issue a
+temporary password, publish an announcement, change a setting, print recovery codes, redeem one.
+**192 screenshots**, and `npm run walk:report` turns them into an Arabic PDF.
+
+**It found seven real defects, two of them blockers, and every existing suite was green.** That is
+the finding worth keeping:
+
+* **The payment wizard could not be completed.** Steps 1 and 4 had no submit button. Step 1 is a
+  single input, so a desktop browser implicitly submits on Enter and the bug is invisible there —
+  but a phone shows a numeric keypad with no Enter key. Step 4 has three fields, so implicit
+  submission does not apply anywhere. The central journey of the product, unfinishable (R-117).
+* **A resident could not send a receipt on the demo database at all.** `trg_no_real_payments_in_demo`
+  refuses ids that do not start `DEMO`; the app minted `PAY…`. On the site the board is shown, the
+  last button answered with a database sentence half in English. Invisible to every test, because
+  every test runs with `env_guard='test'` (R-118).
+* **The review queue offered اعتماد / رفض to the finance_reviewer**, whose role is to audit and never
+  approve — and the POST answered 403. The same screen was missing from their menu, because the menu
+  gated it on the capability its *buttons* need rather than the one the *screen* needs (R-119/R-120).
+* The mandatory receipt photo was announced only by failing at the end (R-121), and the publishing
+  form asked «المشكلة في إيه؟» then said nothing at all after publishing (R-122).
+
+All seven fixed, `tests/access/journeys.test.ts` added (10 checks) so each fails on the day it
+returns, and `npm run verify` is 473 access checks green. The walkthrough now reports **0 findings**.
+
+**The lesson:** `screens` proves the server emits HTML, `a11y` proves that HTML is accessible, and
+the access tests prove the right people reach the right routes — **none of them asks whether there
+is a way forward from the screen**. That question needs a browser.
+
+---
 
 ### What changed in session 33 — a second and a third way in
 
@@ -1835,7 +1873,7 @@ equation is a tautology and is demoted).
 ("Learned during the build") → `RISKS.md` (R-028 onward).
 
 **One command tells you if it still works:** `npm run verify` →
-**~716 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
+**~726 checks, 0 failures.** That is 2 lint rules + typecheck + 107 unit + 407 HTTP
 access/audit/auth/onboarding/transparency/views + 48 ledger invariants + 34 demo checks + 12
 restore-drill checks + **41 screens rendered** + an axe-core WCAG 2.2 AA pass over all of them.
 If it is green, the security and money layers are intact. **It has never run in CI — there is

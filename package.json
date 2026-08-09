@@ -8,7 +8,7 @@
     "lint": "node tools/lint-no-sql.mjs && node tools/lint-rtl.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "npm run build && node --test .build/tests/unit/money.test.js .build/tests/unit/s3sign.test.js .build/tests/unit/webpush.test.js .build/tests/unit/image.test.js .build/tests/unit/quiet.test.js",
-    "test:access": "npm run build && node --test .build/tests/access/access.test.js .build/tests/access/audit.test.js .build/tests/access/auth.test.js .build/tests/access/onboarding.test.js .build/tests/access/transparency.test.js .build/tests/access/views.test.js .build/tests/access/expenses.test.js .build/tests/access/payment_reversal.test.js .build/tests/access/notifications.test.js .build/tests/access/content.test.js .build/tests/access/settlements.test.js .build/tests/access/board_config.test.js .build/tests/access/onboarding_ui.test.js .build/tests/access/shell.test.js .build/tests/access/accounts.test.js .build/tests/access/password.test.js",
+    "test:access": "npm run build && node --test .build/tests/access/access.test.js .build/tests/access/audit.test.js .build/tests/access/auth.test.js .build/tests/access/onboarding.test.js .build/tests/access/transparency.test.js .build/tests/access/views.test.js .build/tests/access/expenses.test.js .build/tests/access/payment_reversal.test.js .build/tests/access/notifications.test.js .build/tests/access/content.test.js .build/tests/access/settlements.test.js .build/tests/access/board_config.test.js .build/tests/access/onboarding_ui.test.js .build/tests/access/shell.test.js .build/tests/access/accounts.test.js .build/tests/access/password.test.js .build/tests/access/journeys.test.js",
     "verify:ledger": "python3 tests/fixtures/verify_ledger.py",
     "verify:demo": "python3 tests/fixtures/verify_demo.py",
     "seed:demo": "python3 seed/demo/generate.py",
@@ -20,6 +20,9 @@
     "gen:vapid": "node tools/gen-vapid.mjs",
     "drill:restore": "node tools/restore-drill.mjs",
     "backup": "node tools/backup.mjs",
+    "dev:demo": "npm run build && node tools/dev-server.mjs",
+    "walk": "npm run build && node tools/walkthrough.mjs",
+    "walk:report": "node tools/walk-report.mjs",
     "a11y": "node tools/a11y-scan.mjs"
   },
   "devDependencies": {
